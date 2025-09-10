@@ -4,164 +4,177 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 import pandas as pd
-import time
-from collections import Counter
-import io
+import json
+import re
 
-# ------------------------
-# SEO Crawler Class
-# ------------------------
-class SEOCrawler:
-    def __init__(self, seed_url, max_pages=30, delay=1):
-        self.seed_url = seed_url
-        self.domain = urlparse(seed_url).netloc
-        self.base_url = f"{urlparse(seed_url).scheme}://{self.domain}"
-        self.visited = set()
-        self.to_visit = [seed_url]
-        self.data = []
-        self.max_pages = max_pages
-        self.delay = delay
-        self.robots = self.load_robots()
+# ---------------------------
+# Helper Functions
+# ---------------------------
 
-    def load_robots(self):
-        robots_url = urljoin(self.base_url, "/robots.txt")
-        rp = RobotFileParser()
+def can_fetch(url, user_agent="*"):
+    """Check robots.txt permission for given URL"""
+    parsed = urlparse(url)
+    robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
+    rp = RobotFileParser()
+    try:
+        rp.set_url(robots_url)
+        rp.read()
+        return rp.can_fetch(user_agent, url), robots_url
+    except:
+        return True, robots_url  # fallback allow
+
+
+def detect_content_type(url, soup):
+    """Categorize page type by URL patterns and tags"""
+    url_lower = url.lower()
+    if "blog" in url_lower or soup.find_all("article"):
+        return "Blog"
+    elif re.search(r"product|item|shop", url_lower):
+        return "Product"
+    elif re.search(r"about|contact|service|solutions", url_lower):
+        return "Landing Page"
+    else:
+        return "Other"
+
+
+def extract_schema(soup):
+    """Extract JSON-LD schema blocks"""
+    schemas = []
+    for tag in soup.find_all("script", type="application/ld+json"):
         try:
-            rp.set_url(robots_url)
-            rp.read()
-        except Exception as e:
-            st.warning(f"⚠️ Could not read robots.txt: {e}")
-        return rp
+            data = json.loads(tag.string)
+            if isinstance(data, dict):
+                schemas.append(data.get("@type", "Unknown"))
+            elif isinstance(data, list):
+                schemas.extend([d.get("@type", "Unknown") for d in data if isinstance(d, dict)])
+        except:
+            continue
+    return ", ".join(schemas) if schemas else ""
 
-    def crawl(self, progress_bar, status_text):
-        while self.to_visit and len(self.visited) < self.max_pages:
-            url = self.to_visit.pop(0)
-            if url in self.visited:
-                continue
 
-            if not self.robots.can_fetch("*", url):
-                st.write(f"⛔ Blocked by robots.txt: {url}")
-                continue
+def crawl_site(start_url, max_pages=50):
+    visited = set()
+    to_visit = [start_url]
+    results = []
 
-            status_text.text(f"Crawling: {url}")
-            self.visited.add(url)
-            result, new_links = self.crawl_page(url)
-            self.data.append(result)
-
-            for link in new_links:
-                if link not in self.visited and link not in self.to_visit:
-                    self.to_visit.append(link)
-
-            progress = len(self.visited) / self.max_pages
-            progress_bar.progress(progress)
-            time.sleep(self.delay)
-
-        df = pd.DataFrame(self.data)
-        return df
-
-    def crawl_page(self, url):
-        result = {
-            "url": url,
-            "status_code": None,
-            "meta_title": None,
-            "meta_title_length": 0,
-            "meta_description": None,
-            "meta_description_length": 0,
-            "h1": [],
-            "word_count": 0
-        }
-        new_links = []
+    while to_visit and len(visited) < max_pages:
+        url = to_visit.pop(0)
+        if url in visited:
+            continue
+        allowed, robots_url = can_fetch(url)
+        if not allowed:
+            st.error(f"🚫 Blocked by robots.txt: {robots_url}")
+            break
 
         try:
-            r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
-            result["status_code"] = r.status_code
-            if r.status_code != 200:
-                return result, []
+            res = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+            status_code = res.status_code
 
-            soup = BeautifulSoup(r.text, "lxml")
+            soup = BeautifulSoup(res.text, "html.parser")
 
-            if soup.title:
-                result["meta_title"] = soup.title.string.strip()
-                result["meta_title_length"] = len(result["meta_title"])
+            title = soup.title.string.strip() if soup.title else ""
+            desc_tag = soup.find("meta", attrs={"name": "description"})
+            desc = desc_tag["content"].strip() if desc_tag and "content" in desc_tag.attrs else ""
 
-            desc = soup.find("meta", attrs={"name": "description"})
-            if desc and desc.get("content"):
-                result["meta_description"] = desc["content"].strip()
-                result["meta_description_length"] = len(result["meta_description"])
+            h_tags = {f"h{i}": [h.get_text(strip=True) for h in soup.find_all(f"h{i}")] for i in range(1, 7)}
+            h1 = h_tags["h1"][0] if h_tags["h1"] else ""
 
-            for h in soup.find_all("h1"):
-                result["h1"].append(h.get_text(strip=True))
+            word_count = len(soup.get_text(" ", strip=True).split())
+            links = [urljoin(url, a["href"]) for a in soup.find_all("a", href=True)]
+            internal_links = [l for l in links if urlparse(l).netloc == urlparse(start_url).netloc]
+            external_links = [l for l in links if urlparse(l).netloc != urlparse(start_url).netloc]
 
-            for a in soup.find_all("a", href=True):
-                link = urljoin(url, a["href"])
-                if urlparse(link).netloc == self.domain:
-                    new_links.append(link)
+            schema = extract_schema(soup)
+            page_type = detect_content_type(url, soup)
 
-            text = soup.get_text(separator=" ", strip=True)
-            result["word_count"] = len(text.split())
+            results.append({
+                "URL": url,
+                "Status": status_code,
+                "Title": title,
+                "Title Length": len(title),
+                "Description": desc,
+                "Description Length": len(desc),
+                "H1": h1,
+                "Word Count": word_count,
+                "Internal Links": len(internal_links),
+                "External Links": len(external_links),
+                "Link-to-Word Ratio": round(len(links) / word_count, 3) if word_count else 0,
+                "Schema": schema,
+                "Content Type": page_type,
+                "H Tags": str(h_tags)
+            })
+
+            # Add new internal links to crawl queue
+            for l in internal_links:
+                if l not in visited and l not in to_visit:
+                    to_visit.append(l)
+
+            visited.add(url)
 
         except Exception as e:
-            result["status_code"] = f"Error: {e}"
+            st.warning(f"⚠️ Failed to fetch {url} ({e})")
 
-        return result, new_links
+    return pd.DataFrame(results)
 
 
-# ------------------------
+# ---------------------------
 # Streamlit App
-# ------------------------
-st.title("🔎 SEO Site Crawler")
+# ---------------------------
 
-seed_url = st.text_input("Enter a website URL:", "https://example.com")
-max_pages = st.slider("Max pages to crawl:", 10, 200, 30)
+st.title("🔎 Advanced SEO Site Crawler")
+
+url = st.text_input("Enter a website URL:", "https://example.com")
+max_pages = st.slider("Max pages to crawl:", 10, 500, 50)
 
 if st.button("Start Crawl"):
-    crawler = SEOCrawler(seed_url=seed_url, max_pages=max_pages, delay=1)
+    with st.spinner("Crawling in progress..."):
+        crawl_df = crawl_site(url, max_pages)
 
-    progress_bar = st.progress(0)
-    status_text = st.empty()
+    if crawl_df.empty:
+        st.warning("⚠️ No pages were crawled (possibly blocked by robots.txt or network error).")
+    else:
+        st.success("✅ Crawl Completed!")
 
-    with st.spinner("Crawling site..."):
-        df = crawler.crawl(progress_bar, status_text)
+        # Display Crawl Results
+        st.subheader("Crawl Results")
+        st.dataframe(crawl_df)
 
-    st.success("✅ Crawl Completed!")
+        # Duplicate Content Detection
+        st.subheader("🔁 Duplicate Content Issues")
 
-    # Show results in Streamlit
-    st.subheader("Crawl Results")
-    st.dataframe(df)
-
-    # Duplicate detection
-    st.subheader("Duplicate Content Issues")
-    if not df.empty:
-        dup_titles = df[df.duplicated("meta_title", keep=False) & df["meta_title"].notna()]
-        dup_desc = df[df.duplicated("meta_description", keep=False) & df["meta_description"].notna()]
-        dup_h1 = df[df.duplicated("h1", keep=False) & df["h1"].notna()]
+        dup_titles = crawl_df[crawl_df.duplicated("Title", keep=False) & crawl_df["Title"].notna()]
+        dup_desc = crawl_df[crawl_df.duplicated("Description", keep=False) & crawl_df["Description"].notna()]
+        dup_h1 = crawl_df[crawl_df.duplicated("H1", keep=False) & crawl_df["H1"].notna()]
 
         if not dup_titles.empty:
-            st.write("🔁 Duplicate Titles")
-            st.dataframe(dup_titles[["url", "meta_title"]])
+            st.markdown("### 📝 Duplicate Titles")
+            st.dataframe(dup_titles)
+        else:
+            st.info("No duplicate titles found ✅")
 
         if not dup_desc.empty:
-            st.write("🔁 Duplicate Descriptions")
-            st.dataframe(dup_desc[["url", "meta_description"]])
+            st.markdown("### 📝 Duplicate Meta Descriptions")
+            st.dataframe(dup_desc)
+        else:
+            st.info("No duplicate meta descriptions found ✅")
 
         if not dup_h1.empty:
-            st.write("🔁 Duplicate H1s")
-            st.dataframe(dup_h1[["url", "h1"]])
+            st.markdown("### 📝 Duplicate H1 Tags")
+            st.dataframe(dup_h1)
+        else:
+            st.info("No duplicate H1 tags found ✅")
 
-    # Download Excel
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        df.to_excel(writer, sheet_name="Crawl Data", index=False)
-        if not dup_titles.empty:
-            dup_titles.to_excel(writer, sheet_name="Duplicate Titles", index=False)
-        if not dup_desc.empty:
-            dup_desc.to_excel(writer, sheet_name="Duplicate Descriptions", index=False)
-        if not dup_h1.empty:
-            dup_h1.to_excel(writer, sheet_name="Duplicate H1s", index=False)
+        # Export to Excel
+        st.subheader("📊 Export Results")
+        output_file = "seo_crawl_report.xlsx"
+        with pd.ExcelWriter(output_file, engine="openpyxl") as writer:
+            crawl_df.to_excel(writer, sheet_name="Crawl Results", index=False)
+            if not dup_titles.empty:
+                dup_titles.to_excel(writer, sheet_name="Duplicate Titles", index=False)
+            if not dup_desc.empty:
+                dup_desc.to_excel(writer, sheet_name="Duplicate Descriptions", index=False)
+            if not dup_h1.empty:
+                dup_h1.to_excel(writer, sheet_name="Duplicate H1", index=False)
 
-    st.download_button(
-        label="📥 Download Excel Report",
-        data=output.getvalue(),
-        file_name="seo_crawl_results.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+        with open(output_file, "rb") as f:
+            st.download_button("⬇️ Download Excel Report", f, file_name=output_file)
