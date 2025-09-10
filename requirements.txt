@@ -1,6 +1,7 @@
 streamlit
+requests
 beautifulsoup4
 lxml
-requests
 pandas
 xlsxwriter
+openpyxl
