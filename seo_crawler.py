@@ -13,7 +13,6 @@ import io
 # ---------------------------
 # Helper utilities
 # ---------------------------
-
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; SEO-Crawler/1.0; +https://example.com)"}
 
 def load_robots_for_domain(domain):
@@ -23,7 +22,6 @@ def load_robots_for_domain(domain):
         rp.set_url(robots_url)
         rp.read()
     except Exception:
-        # return a permissive stub if can't read robots
         rp = None
     return rp, robots_url
 
@@ -49,7 +47,6 @@ def extract_schema_types(soup):
             if not raw:
                 continue
             data = json.loads(raw)
-            # handle dict or list
             if isinstance(data, dict):
                 t = data.get("@type") or data.get("type")
                 if isinstance(t, list):
@@ -68,20 +65,17 @@ def extract_schema_types(soup):
 
 def detect_content_type(url, soup):
     u = url.lower()
-    # URL-based heuristics
     if re.search(r"/blog/|/news/|/posts/|/articles/", u) or soup.find("article"):
         return "Blog / Article"
     if re.search(r"/product/|/shop/|/item/|/store/|/collections/", u):
         return "Product"
     if re.search(r"/about|/contact|/service|/services|/pricing|/features", u):
         return "Landing Page"
-    # Meta/type hints
     if soup.find("meta", attrs={"property":"og:type"}) and soup.find("meta", attrs={"property":"og:type"})["content"] == "product":
         return "Product"
     return "Other"
 
 def normalize_url(u):
-    # remove fragments and whitespace
     if not u:
         return u
     u = u.split('#')[0].strip()
@@ -90,12 +84,7 @@ def normalize_url(u):
 # ---------------------------
 # Core crawler
 # ---------------------------
-
 def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_progress_cb=None):
-    """
-    Returns pandas.DataFrame with collected data.
-    show_progress_cb: optional callback(progress_float, message) - where progress_float in [0,1]
-    """
     seed_url = seed_url.rstrip('/')
     parsed_seed = urlparse(seed_url)
     seed_domain = parsed_seed.netloc
@@ -112,72 +101,47 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
     while to_visit and len(visited) < max_pages:
         url = to_visit.pop(0)
         url = normalize_url(url)
-        if not url:
-            continue
-        if url in visited:
+        if not url or url in visited:
             continue
 
         allowed, robots_url = allowed_by_robots(url, ignore_robots=ignore_robots)
         if not allowed:
-            # Stop crawling for blocked seed domain or skip this URL
-            # We'll skip and continue
-            # Note: for user clarity we return robots_url so UI can show it
             return pd.DataFrame(), {"blocked": True, "robots_url": robots_url}
 
-        # status update
         if show_progress_cb:
             show_progress_cb(min(len(visited)/max_pages, 1.0), f"Crawling: {url}")
 
         try:
+            start_time = time.time()
             r = session.get(url, timeout=12)
+            crawl_time = round(time.time() - start_time, 2)  # seconds
             status_code = r.status_code
+
             if status_code >= 400:
-                # record but skip parsing heavy pages
                 results.append({
-                    "URL": url,
-                    "Status": status_code,
-                    "Crawl Status": "HTTP Error",
-                    "Title": "",
-                    "Title Length": 0,
-                    "Description": "",
-                    "Description Length": 0,
-                    "H1": "",
-                    "H Tags": "",
-                    "Word Count": 0,
-                    "Internal Links": 0,
-                    "External Links": 0,
-                    "Link-to-Word Ratio": 0,
-                    "Schema": "",
-                    "Content Type": "",
+                    "URL": url, "Status": status_code, "Crawl Status": "HTTP Error",
+                    "Title": "", "Title Length": 0, "Description": "", "Description Length": 0,
+                    "H1": "", "H Tags": "", "Word Count": 0,
+                    "Internal Links": 0, "External Links": 0, "Link-to-Word Ratio": 0,
+                    "Schema": "", "Content Type": "", "MIME Type": r.headers.get("Content-Type", ""),
+                    "Crawl Time (s)": crawl_time
                 })
                 visited.add(url)
                 time.sleep(delay)
                 continue
 
             soup = BeautifulSoup(r.text, "lxml")
-
-            # Title & description
-            title = (soup.title.string.strip() if soup.title and soup.title.string else "").strip()
+            title = (soup.title.string.strip() if soup.title and soup.title.string else "")
             desc_tag = soup.find("meta", attrs={"name": "description"})
             desc = desc_tag["content"].strip() if desc_tag and desc_tag.get("content") else ""
 
-            # Headings
-            h_tags = {}
-            for i in range(1,7):
-                hs = [h.get_text(" ", strip=True) for h in soup.find_all(f"h{i}")]
-                h_tags[f"h{i}"] = hs
+            h_tags = {f"h{i}": [h.get_text(" ", strip=True) for h in soup.find_all(f"h{i}")] for i in range(1,7)}
             h1 = h_tags["h1"][0] if h_tags["h1"] else ""
 
-            # Links
             anchors = []
-            internal_links = []
-            external_links = []
+            internal_links, external_links = [], []
             for a in soup.find_all("a", href=True):
-                raw_href = a.get("href")
-                if raw_href is None:
-                    continue
-                href = urljoin(url, raw_href)
-                href = normalize_url(href)
+                href = normalize_url(urljoin(url, a.get("href")))
                 if not href:
                     continue
                 anchors.append({"href": href, "text": a.get_text(" ", strip=True)})
@@ -187,40 +151,28 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
                 else:
                     external_links.append(href)
 
-            # Word count
             text = soup.get_text(" ", strip=True)
-            words = text.split()
-            word_count = len(words)
-
-            # Link-to-word ratio
+            word_count = len(text.split())
             total_links = len(internal_links) + len(external_links)
             link_to_word = round(total_links / word_count, 3) if word_count else 0
 
             schema = extract_schema_types(soup)
             content_type = detect_content_type(url, soup)
+            mime_type = r.headers.get("Content-Type", "")
 
             results.append({
-                "URL": url,
-                "Status": status_code,
-                "Crawl Status": "Success",
-                "Title": title,
-                "Title Length": len(title),
-                "Description": desc,
-                "Description Length": len(desc),
-                "H1": h1,
-                "H Tags": json.dumps(h_tags, ensure_ascii=False),
-                "Word Count": word_count,
-                "Internal Links": len(set(internal_links)),
-                "External Links": len(set(external_links)),
-                "Link-to-Word Ratio": link_to_word,
-                "Schema": schema,
-                "Content Type": content_type,
+                "URL": url, "Status": status_code, "Crawl Status": "Success",
+                "Title": title, "Title Length": len(title),
+                "Description": desc, "Description Length": len(desc),
+                "H1": h1, "H Tags": json.dumps(h_tags, ensure_ascii=False),
+                "Word Count": word_count, "Internal Links": len(set(internal_links)),
+                "External Links": len(set(external_links)), "Link-to-Word Ratio": link_to_word,
+                "Schema": schema, "Content Type": content_type, "MIME Type": mime_type,
+                "Crawl Time (s)": crawl_time
             })
 
-            # add internal links to queue
             for link in internal_links:
                 if link not in visited and link not in to_visit:
-                    # restrict to same scheme+domain (avoid mailto, tel)
                     p = urlparse(link)
                     if p.scheme in ("http", "https"):
                         to_visit.append(link)
@@ -229,35 +181,22 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
             time.sleep(delay)
 
         except Exception as e:
-            # On network parse error record the URL with error
             results.append({
-                "URL": url,
-                "Status": "Error",
-                "Crawl Status": f"Error: {e}",
-                "Title": "",
-                "Title Length": 0,
-                "Description": "",
-                "Description Length": 0,
-                "H1": "",
-                "H Tags": "",
-                "Word Count": 0,
-                "Internal Links": 0,
-                "External Links": 0,
-                "Link-to-Word Ratio": 0,
-                "Schema": "",
-                "Content Type": "",
+                "URL": url, "Status": "Error", "Crawl Status": f"Error: {e}",
+                "Title": "", "Title Length": 0, "Description": "", "Description Length": 0,
+                "H1": "", "H Tags": "", "Word Count": 0, "Internal Links": 0, "External Links": 0,
+                "Link-to-Word Ratio": 0, "Schema": "", "Content Type": "", "MIME Type": "",
+                "Crawl Time (s)": 0
             })
             visited.add(url)
             time.sleep(delay)
             continue
 
-    df = pd.DataFrame(results)
-    return df, {"blocked": False}
+    return pd.DataFrame(results), {"blocked": False}
 
 # ---------------------------
 # Streamlit UI
 # ---------------------------
-
 st.set_page_config(page_title="Advanced SEO Site Crawler", layout="wide")
 st.title("🔎 Advanced SEO Site Crawler")
 
@@ -276,7 +215,6 @@ if run_button:
     if not seed_url.startswith("http"):
         st.error("Please provide a valid URL starting with http:// or https://")
     else:
-        # small helper to update progress area
         def show_progress(pct, message):
             try:
                 progress_bar.progress(min(max(pct, 0.0), 1.0))
@@ -287,91 +225,87 @@ if run_button:
         status_area.info("Preparing to crawl...")
         df, meta = crawl_site(seed_url, max_pages=max_pages, delay=delay, ignore_robots=ignore_robots, show_progress_cb=show_progress)
 
-        # If blocked by robots.txt
         if meta.get("blocked"):
-            robots_url = meta.get("robots_url")
-            st.error(f"⛔ Crawling blocked by robots.txt: {robots_url}")
-            st.warning("You may toggle 'Ignore robots.txt' (testing only) to override. Do not use irresponsibly.")
+            st.error(f"⛔ Crawling blocked by robots.txt: {meta.get('robots_url')}")
+            st.warning("You may toggle 'Ignore robots.txt' to override (use responsibly).")
         elif df is None or df.empty:
-            st.warning("⚠️ No pages crawled (network error, no allowed pages, or site blocked).")
+            st.warning("⚠️ No pages crawled.")
         else:
             progress_bar.progress(1.0)
             st.success(f"✅ Crawl completed — {len(df)} pages collected")
 
-            # Clean columns
             df_display = df.copy()
-            # Show friendly column order
-            cols_order = ["URL", "Status", "Crawl Status", "Title", "Title Length", "Description", "Description Length", "H1", "Word Count", "Internal Links", "External Links", "Link-to-Word Ratio", "Schema", "Content Type"]
-            cols_order = [c for c in cols_order if c in df_display.columns] + [c for c in df_display.columns if c not in cols_order]
+            cols_order = ["URL", "Status", "Crawl Status", "Title", "Title Length",
+                          "Description", "Description Length", "H1", "Word Count",
+                          "Internal Links", "External Links", "Link-to-Word Ratio",
+                          "Schema", "Content Type", "MIME Type", "Crawl Time (s)"]
+            cols_order = [c for c in cols_order if c in df_display.columns] + \
+                         [c for c in df_display.columns if c not in cols_order]
             df_display = df_display[cols_order]
 
+            # MIME filter
             st.subheader("Crawl Results")
-            st.dataframe(df_display, use_container_width=True)
+            mime_options = sorted(df_display["MIME Type"].dropna().unique())
+            selected_mime = st.multiselect("Filter by MIME Type:", mime_options, default=mime_options)
+            df_filtered = df_display[df_display["MIME Type"].isin(selected_mime)]
+            st.dataframe(df_filtered, use_container_width=True)
+
+            # Charts
+            st.subheader("📊 Visual Insights")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**MIME Type Distribution**")
+                st.bar_chart(df_filtered["MIME Type"].value_counts())
+            with col2:
+                st.markdown("**Content Type Distribution**")
+                st.bar_chart(df_filtered["Content Type"].value_counts())
 
             # Duplicate detection
             st.subheader("🔁 Duplicate Content Detection")
-            # fillna with empty strings so duplicated detection works
-            df_dup = df_display.fillna("")
+            df_dup = df_filtered.fillna("")
             dup_titles = df_dup[df_dup.duplicated("Title", keep=False) & df_dup["Title"].str.strip().astype(bool)]
             dup_desc = df_dup[df_dup.duplicated("Description", keep=False) & df_dup["Description"].str.strip().astype(bool)]
             dup_h1 = df_dup[df_dup.duplicated("H1", keep=False) & df_dup["H1"].str.strip().astype(bool)]
-
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.markdown("**Duplicate Titles**")
-                if not dup_titles.empty:
-                    st.dataframe(dup_titles[["URL", "Title"]], height=250)
-                else:
-                    st.info("No duplicate titles found ✅")
+                st.dataframe(dup_titles[["URL", "Title"]]) if not dup_titles.empty else st.info("None ✅")
             with col2:
                 st.markdown("**Duplicate Meta Descriptions**")
-                if not dup_desc.empty:
-                    st.dataframe(dup_desc[["URL", "Description"]], height=250)
-                else:
-                    st.info("No duplicate meta descriptions ✅")
+                st.dataframe(dup_desc[["URL", "Description"]]) if not dup_desc.empty else st.info("None ✅")
             with col3:
                 st.markdown("**Duplicate H1s**")
-                if not dup_h1.empty:
-                    st.dataframe(dup_h1[["URL", "H1"]], height=250)
-                else:
-                    st.info("No duplicate H1s ✅")
+                st.dataframe(dup_h1[["URL", "H1"]]) if not dup_h1.empty else st.info("None ✅")
 
-            # Simple summary metrics
+            # Summary
             st.subheader("📊 Site Summary")
-            total_pages = len(df)
-            avg_title_len = int(df["Title Length"].replace("", 0).astype(int).mean()) if "Title Length" in df.columns and not df["Title Length"].empty else 0
-            avg_desc_len = int(df["Description Length"].replace("", 0).astype(int).mean()) if "Description Length" in df.columns and not df["Description Length"].empty else 0
-            avg_wc = int(df["Word Count"].replace("", 0).astype(int).mean()) if "Word Count" in df.columns and not df["Word Count"].empty else 0
+            st.markdown(f"- Pages crawled: **{len(df_filtered)}**")
+            st.markdown(f"- Avg title length: **{int(df_filtered['Title Length'].mean())}** chars")
+            st.markdown(f"- Avg description length: **{int(df_filtered['Description Length'].mean())}** chars")
+            st.markdown(f"- Avg word count: **{int(df_filtered['Word Count'].mean())}** words")
+            st.markdown(f"- Avg crawl time: **{round(df_filtered['Crawl Time (s)'].mean(),2)}s/page**")
 
-            st.markdown(f"- Pages crawled: **{total_pages}**")
-            st.markdown(f"- Average title length: **{avg_title_len}** chars")
-            st.markdown(f"- Average description length: **{avg_desc_len}** chars")
-            st.markdown(f"- Average word count: **{avg_wc}** words")
-
-            # Export to Excel in-memory
+            # Excel export
             st.subheader("📥 Export / Download")
             towrite = io.BytesIO()
             with pd.ExcelWriter(towrite, engine="xlsxwriter") as writer:
-                df_display.to_excel(writer, sheet_name="Crawl Results", index=False)
+                df_filtered.to_excel(writer, sheet_name="Crawl Results", index=False)
                 if not dup_titles.empty:
                     dup_titles.to_excel(writer, sheet_name="Duplicate Titles", index=False)
                 if not dup_desc.empty:
                     dup_desc.to_excel(writer, sheet_name="Duplicate Descriptions", index=False)
                 if not dup_h1.empty:
                     dup_h1.to_excel(writer, sheet_name="Duplicate H1s", index=False)
-
-                # Add a small dashboard sheet
                 summary = {
-                    "Pages Crawled": [total_pages],
-                    "Avg Title Length": [avg_title_len],
-                    "Avg Description Length": [avg_desc_len],
-                    "Avg Word Count": [avg_wc]
+                    "Pages Crawled": [len(df_filtered)],
+                    "Avg Title Length": [int(df_filtered['Title Length'].mean())],
+                    "Avg Description Length": [int(df_filtered['Description Length'].mean())],
+                    "Avg Word Count": [int(df_filtered['Word Count'].mean())],
+                    "Avg Crawl Time (s)": [round(df_filtered['Crawl Time (s)'].mean(), 2)]
                 }
                 pd.DataFrame(summary).to_excel(writer, sheet_name="Summary", index=False)
-
                 writer.save()
             towrite.seek(0)
-
             st.download_button(
                 label="⬇️ Download Excel Report",
                 data=towrite.getvalue(),
