@@ -215,19 +215,31 @@ def render_streamlit_organic_ui(st, df: pd.DataFrame, html_col: str = "HTML"):
     if "URL" not in analyzed.columns and len(serialized[2]) > 0:
         analyzed["URL"] = serialized[2]
 
+    # Initialize session state for selected URL
+    if "organic_selected_url" not in st.session_state:
+        st.session_state.organic_selected_url = "(none)"
+
     # let user pick a URL to inspect
     st.markdown("**Inspect pages**")
     url_map = analyzed["URL"].fillna("").tolist() if "URL" in analyzed.columns else [""] * len(analyzed)
     
-    # Use session state to prevent rerun on selectbox selection
-    if "selected_url" not in st.session_state:
-        st.session_state.selected_url = "(none)"
+    # Create a callback to update session state without triggering full rerun
+    def on_url_change():
+        st.session_state.organic_selected_url = st.session_state.url_selectbox_widget
     
-    chosen = st.selectbox("Choose a URL to inspect", options=["(none)"] + url_map, key="url_selectbox")
-    st.session_state.selected_url = chosen
+    chosen = st.selectbox(
+        "Choose a URL to inspect", 
+        options=["(none)"] + url_map, 
+        key="url_selectbox_widget",
+        on_change=on_url_change,
+        index=0
+    )
     
-    if chosen and chosen != "(none)":
-        row = analyzed[analyzed["URL"] == chosen].iloc[0]
+    # Use session state value instead of chosen to prevent rerun cascades
+    selected = st.session_state.organic_selected_url
+    
+    if selected and selected != "(none)":
+        row = analyzed[analyzed["URL"] == selected].iloc[0]
         st.markdown("**Top suggested keywords (TF-IDF)**")
         if row["keywords"]:
             kw_table = _pd.DataFrame(row["keywords"])
