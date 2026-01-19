@@ -218,7 +218,14 @@ def render_streamlit_organic_ui(st, df: pd.DataFrame, html_col: str = "HTML"):
     # let user pick a URL to inspect
     st.markdown("**Inspect pages**")
     url_map = analyzed["URL"].fillna("").tolist() if "URL" in analyzed.columns else [""] * len(analyzed)
-    chosen = st.selectbox("Choose a URL to inspect", options=["(none)"] + url_map)
+    
+    # Use session state to prevent rerun on selectbox selection
+    if "selected_url" not in st.session_state:
+        st.session_state.selected_url = "(none)"
+    
+    chosen = st.selectbox("Choose a URL to inspect", options=["(none)"] + url_map, key="url_selectbox")
+    st.session_state.selected_url = chosen
+    
     if chosen and chosen != "(none)":
         row = analyzed[analyzed["URL"] == chosen].iloc[0]
         st.markdown("**Top suggested keywords (TF-IDF)**")
