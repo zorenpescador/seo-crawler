@@ -177,6 +177,9 @@ def analyze_organic_candidates(
     out["keywords"] = term_lists
     out["top_terms"] = top_terms
     out["top_term_intent"] = intents
+    # Preserve URL column from original dataframe if it exists
+    if "URL" in df.columns:
+        out["URL"] = df["URL"]
     return out
 
 
