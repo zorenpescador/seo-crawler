@@ -9,7 +9,7 @@ import json
 import re
 import time
 import io
-from seo_crawler import organic_research as org
+import organic_research as org
 
 # ---------------------------
 # Helper utilities
