@@ -9,6 +9,7 @@ import json
 import re
 import time
 import io
+from seo_crawler import organic_research as org
 
 # ---------------------------
 # Helper utilities
@@ -306,6 +307,9 @@ if run_button:
             else:
                 ph3.info("None ✅")
                 ph3.write("")
+
+            # after df_filtered is computed (and it contains the HTML column):
+            org.render_streamlit_organic_ui(st, df_filtered, html_col="HTML")
 
             # Summary
             st.subheader("📊 Site Summary")
