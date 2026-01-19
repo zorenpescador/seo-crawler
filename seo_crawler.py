@@ -304,7 +304,7 @@ if run_button:
                     "Avg Crawl Time (s)": [round(df_filtered['Crawl Time (s)'].mean(), 2)]
                 }
                 pd.DataFrame(summary).to_excel(writer, sheet_name="Summary", index=False)
-                writer.save()
+                writer.close()
             towrite.seek(0)
             st.download_button(
                 label="⬇️ Download Excel Report",
