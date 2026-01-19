@@ -5,3 +5,5 @@ beautifulsoup4
 openpyxl
 xlsxwriter
 lxml
+scikit-learn
+pandas
