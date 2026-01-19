@@ -179,8 +179,8 @@ def analyze_organic_candidates(
     out["top_term_intent"] = intents
     # Preserve URL column from original dataframe if it exists
     if "URL" in df.columns:
-        # Ensure URL is added with proper index alignment
-        out.insert(0, "URL", df.loc[out.index, "URL"].values)
+        # Reset index temporarily to ensure proper alignment
+        out["URL"] = df.reset_index(drop=True)["URL"].values[:len(out)]
     return out
 
 
@@ -211,9 +211,13 @@ def render_streamlit_organic_ui(st, df: pd.DataFrame, html_col: str = "HTML"):
     serialized = (list(df.index), list(df[html_col].fillna("").astype(str)), list(df.get("URL", [""] * len(df))))
     analyzed = _run_analysis(serialized)
 
+    # Ensure URL column exists in analyzed dataframe
+    if "URL" not in analyzed.columns and len(serialized[2]) > 0:
+        analyzed["URL"] = serialized[2]
+
     # let user pick a URL to inspect
     st.markdown("**Inspect pages**")
-    url_map = analyzed["URL"].fillna("").tolist()
+    url_map = analyzed["URL"].fillna("").tolist() if "URL" in analyzed.columns else [""] * len(analyzed)
     chosen = st.selectbox("Choose a URL to inspect", options=["(none)"] + url_map)
     if chosen and chosen != "(none)":
         row = analyzed[analyzed["URL"] == chosen].iloc[0]
