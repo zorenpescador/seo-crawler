@@ -179,7 +179,8 @@ def analyze_organic_candidates(
     out["top_term_intent"] = intents
     # Preserve URL column from original dataframe if it exists
     if "URL" in df.columns:
-        out["URL"] = df["URL"]
+        # Ensure URL is added with proper index alignment
+        out.insert(0, "URL", df.loc[out.index, "URL"].values)
     return out
 
 
