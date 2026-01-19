@@ -263,9 +263,16 @@ if run_button:
             # Duplicate detection
             st.subheader("🔁 Duplicate Content Detection")
             df_dup = df_filtered.fillna("")
-            dup_titles = df_dup[df_dup.duplicated("Title", keep=False) & df_dup["Title"].str.strip().astype(bool)]
-            dup_desc = df_dup[df_dup.duplicated("Description", keep=False) & df_dup["Description"].str.strip().astype(bool)]
-            dup_h1 = df_dup[df_dup.duplicated("H1", keep=False) & df_dup["H1"].str.strip().astype(bool)]
+            dup_titles = df_dup[
+                df_dup.duplicated("Title", keep=False) & df_dup["Title"].str.strip().astype(bool)
+            ]
+            dup_desc = df_dup[
+            df_dup.duplicated("Description", keep=False) & df_dup["Description"].str.strip().astype(bool)
+            ]
+            dup_h1 = df_dup[
+            df_dup.duplicated("H1", keep=False) & df_dup["H1"].str.strip().astype(bool)
+            ]
+            
             col1, col2, col3 = st.columns(3)
 
             # create placeholders so layout stays consistent
@@ -279,26 +286,26 @@ if run_button:
             # Duplicate Titles
             ph1.markdown("**Duplicate Titles**")
             if not dup_titles.empty:
-            ph1.dataframe(dup_titles[["URL", "Title"]], height=df_height, use_container_width=True)
+                ph1.dataframe(dup_titles[["URL", "Title"]], height=df_height, use_container_width=True)
             else:
-            ph1.info("None ✅")
-            ph1.write("")  # small spacer to help match height
+                ph1.info("None ✅")
+                ph1.write("")  # small spacer to help match height
 
             # Duplicate Meta Descriptions
             ph2.markdown("**Duplicate Meta Descriptions**")
             if not dup_desc.empty:
-            ph2.dataframe(dup_desc[["URL", "Description"]], height=df_height, use_container_width=True)
+                ph2.dataframe(dup_desc[["URL", "Description"]], height=df_height, use_container_width=True)
             else:
-            ph2.info("None ✅")
-            ph2.write("")
+                ph2.info("None ✅")
+                ph2.write("")
 
             # Duplicate H1s
             ph3.markdown("**Duplicate H1s**")
             if not dup_h1.empty:
-            ph3.dataframe(dup_h1[["URL", "H1"]], height=df_height, use_container_width=True)
+                ph3.dataframe(dup_h1[["URL", "H1"]], height=df_height, use_container_width=True)
             else:
-            ph3.info("None ✅")
-            ph3.write("")
+                ph3.info("None ✅")
+                ph3.write("")
 
             # Summary
             st.subheader("📊 Site Summary")
