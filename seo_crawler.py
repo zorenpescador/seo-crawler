@@ -267,15 +267,38 @@ if run_button:
             dup_desc = df_dup[df_dup.duplicated("Description", keep=False) & df_dup["Description"].str.strip().astype(bool)]
             dup_h1 = df_dup[df_dup.duplicated("H1", keep=False) & df_dup["H1"].str.strip().astype(bool)]
             col1, col2, col3 = st.columns(3)
-            with col1:
-                st.markdown("**Duplicate Titles**")
-                st.dataframe(dup_titles[["URL", "Title"]]) if not dup_titles.empty else st.info("None ✅")
-            with col2:
-                st.markdown("**Duplicate Meta Descriptions**")
-                st.dataframe(dup_desc[["URL", "Description"]]) if not dup_desc.empty else st.info("None ✅")
-            with col3:
-                st.markdown("**Duplicate H1s**")
-                st.dataframe(dup_h1[["URL", "H1"]]) if not dup_h1.empty else st.info("None ✅")
+
+            # create placeholders so layout stays consistent
+            ph1 = col1.empty()
+            ph2 = col2.empty()
+            ph3 = col3.empty()
+
+            # choose a fixed height for dataframes so columns line up visually
+            df_height = 220
+            
+            # Duplicate Titles
+            ph1.markdown("**Duplicate Titles**")
+            if not dup_titles.empty:
+            ph1.dataframe(dup_titles[["URL", "Title"]], height=df_height, use_container_width=True)
+            else:
+            ph1.info("None ✅")
+            ph1.write("")  # small spacer to help match height
+
+            # Duplicate Meta Descriptions
+            ph2.markdown("**Duplicate Meta Descriptions**")
+            if not dup_desc.empty:
+            ph2.dataframe(dup_desc[["URL", "Description"]], height=df_height, use_container_width=True)
+            else:
+            ph2.info("None ✅")
+            ph2.write("")
+
+            # Duplicate H1s
+            ph3.markdown("**Duplicate H1s**")
+            if not dup_h1.empty:
+            ph3.dataframe(dup_h1[["URL", "H1"]], height=df_height, use_container_width=True)
+            else:
+            ph3.info("None ✅")
+            ph3.write("")
 
             # Summary
             st.subheader("📊 Site Summary")
