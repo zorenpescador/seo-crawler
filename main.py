@@ -169,7 +169,7 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
                 "Word Count": word_count, "Internal Links": len(set(internal_links)),
                 "External Links": len(set(external_links)), "Link-to-Word Ratio": link_to_word,
                 "Schema": schema, "Content Type": content_type, "MIME Type": mime_type,
-                "Crawl Time (s)": crawl_time
+                "Crawl Time (s)": crawl_time, "HTML": r.text
             })
 
             for link in internal_links:
