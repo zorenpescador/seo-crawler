@@ -612,7 +612,8 @@ if st.session_state.crawl_results is not None:
         with col2:
             st.markdown("")
             st.markdown("")
-            # Direct clickable link to keyword research page
-            st.markdown("""
-            [🔍 **Go to Keyword Research** →](keyword-research)
-            """, unsafe_allow_html=False)
+            st.link_button(
+                "🔍 Go to Keyword Research →",
+                url="/?page=keyword-research",
+                use_container_width=True
+            )
