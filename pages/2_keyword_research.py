@@ -4,7 +4,18 @@ Dedicated page for comprehensive keyword analysis and research.
 """
 
 import streamlit as st
-import keyword_research as kr
+import sys
+import os
+
+# Add parent directory to path to import modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    import keyword_research as kr
+except ImportError as e:
+    st.error(f"❌ Error importing keyword_research module: {e}")
+    st.stop()
+
 import pandas as pd
 from bs4 import BeautifulSoup
 
@@ -44,15 +55,20 @@ if input_method == "Paste Content":
             for script in soup(["script", "style"]):
                 script.decompose()
             text_content = soup.get_text()
-        except:
+        except Exception as e:
+            st.warning(f"Could not parse as HTML, treating as plain text: {e}")
             text_content = content_input
         
-        all_keywords = kr.extract_keywords_from_text(text_content)
-        
-        if all_keywords:
-            st.success(f"✅ Extracted {len(all_keywords)} keywords")
-        else:
-            st.warning("⚠️ No keywords could be extracted from the content")
+        try:
+            all_keywords = kr.extract_keywords_from_text(text_content)
+            
+            if all_keywords:
+                st.success(f"✅ Extracted {len(all_keywords)} keywords")
+            else:
+                st.warning("⚠️ No keywords could be extracted from the content")
+        except Exception as e:
+            st.error(f"❌ Error extracting keywords: {e}")
+            all_keywords = []
 
 elif input_method == "Use Crawl Results":
     if "crawl_results" not in st.session_state or st.session_state.crawl_results is None:
