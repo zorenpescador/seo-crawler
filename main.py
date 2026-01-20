@@ -347,6 +347,12 @@ status_area = st.empty()
 progress_bar = st.progress(0.0)
 status_text = st.empty()
 
+# Initialize session state for crawl results
+if "crawl_results" not in st.session_state:
+    st.session_state.crawl_results = None
+if "crawl_metadata" not in st.session_state:
+    st.session_state.crawl_metadata = None
+
 if run_button:
     if not seed_url.startswith("http"):
         st.error("❌ Please provide a valid URL starting with http:// or https://")
@@ -360,208 +366,218 @@ if run_button:
 
         status_area.info("🔍 Preparing to crawl...")
         df, meta = crawl_site(seed_url, max_pages=max_pages, delay=delay, ignore_robots=ignore_robots, show_progress_cb=show_progress)
+        
+        # Store results in session state for persistence across reruns
+        st.session_state.crawl_results = df
+        st.session_state.crawl_metadata = meta
+        st.rerun()
 
-        if meta.get("blocked"):
-            st.error(f"🚫 Crawling blocked by robots.txt: {meta.get('robots_url')}")
-            st.warning("💡 You may toggle 'Ignore robots.txt' to override (use responsibly).")
-        elif df is None or df.empty:
-            st.warning("⚠️ No pages were crawled. Please check your URL and try again.")
-        else:
-            progress_bar.progress(1.0)
-            status_text.empty()
-            
-            # Success message with stats
-            with st.container():
-                st.success(f"✅ Crawl completed successfully")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Pages Crawled", len(df), "")
-                with col2:
-                    successful = len(df[df["Crawl Status"] == "Success"])
-                    st.metric("Successful", successful, f"{int(successful/len(df)*100)}%")
-                with col3:
-                    errors = len(df[df["Crawl Status"] != "Success"])
-                    st.metric("Errors/Blocked", errors, "")
-            
-            st.markdown("---")
+# Display results from session state if available
+if st.session_state.crawl_results is not None:
+    df = st.session_state.crawl_results
+    meta = st.session_state.crawl_metadata
 
-            df_display = df.copy()
-            cols_order = ["URL", "Status", "Crawl Status", "Title", "Title Length",
-                          "Description", "Description Length", "H1", "Word Count",
-                          "Internal Links", "External Links", "Link-to-Word Ratio",
-                          "Schema", "Content Type", "MIME Type", "Crawl Time (s)"]
-            cols_order = [c for c in cols_order if c in df_display.columns] + \
-                         [c for c in df_display.columns if c not in cols_order]
-            df_display = df_display[cols_order]
-
-            # Crawl Results with tabs
-            st.subheader("📋 Crawl Results")
-            tab1, tab2, tab3 = st.tabs(["All Pages", "By Content Type", "By Status"])
-            
-            with tab1:
-                # MIME filter
-                mime_options = sorted(df_display["MIME Type"].dropna().unique())
-                selected_mime = st.multiselect(
-                    "Filter by MIME Type:",
-                    mime_options,
-                    default=mime_options,
-                    key="mime_filter"
-                )
-                df_filtered = df_display[df_display["MIME Type"].isin(selected_mime)]
-                st.dataframe(df_filtered, use_container_width=True, height=400)
-            
-            with tab2:
-                content_types = df_display["Content Type"].dropna().unique()
-                selected_type = st.selectbox(
-                    "Select content type:",
-                    options=content_types,
-                    key="content_type_filter"
-                )
-                df_content = df_display[df_display["Content Type"] == selected_type]
-                st.dataframe(df_content, use_container_width=True, height=400)
-                st.caption(f"Showing {len(df_content)} pages of type '{selected_type}'")
-            
-            with tab3:
-                status_types = sorted(df_display["Crawl Status"].dropna().unique())
-                selected_status = st.selectbox(
-                    "Select crawl status:",
-                    options=status_types,
-                    key="status_filter"
-                )
-                df_status = df_display[df_display["Crawl Status"] == selected_status]
-                st.dataframe(df_status, use_container_width=True, height=400)
-                st.caption(f"Showing {len(df_status)} pages with status '{selected_status}'")
-
-            # Charts
-            st.subheader("📊 Visual Insights")
-            chart_col1, chart_col2 = st.columns(2)
-            
-            with chart_col1:
-                st.markdown("**MIME Type Distribution**")
-                mime_dist = df_display["MIME Type"].value_counts()
-                st.bar_chart(mime_dist)
-            
-            with chart_col2:
-                st.markdown("**Content Type Distribution**")
-                content_dist = df_display["Content Type"].value_counts()
-                st.bar_chart(content_dist)
-            
-            # Additional charts
-            chart_col3, chart_col4 = st.columns(2)
-            
-            with chart_col3:
-                st.markdown("**HTTP Status Codes**")
-                status_dist = df_display["Status"].value_counts()
-                st.bar_chart(status_dist)
-            
-            with chart_col4:
-                st.markdown("**Average Crawl Time by Content Type**")
-                crawl_time_avg = df_display.groupby("Content Type")["Crawl Time (s)"].mean()
-                st.bar_chart(crawl_time_avg)
-
-            # Duplicate detection
-            st.subheader("🔁 Duplicate Content Detection")
-            st.markdown("Identify pages with duplicate titles, descriptions, and H1 tags.")
-            
-            df_dup = df_display.fillna("")
-            dup_titles = df_dup[
-                df_dup.duplicated("Title", keep=False) & df_dup["Title"].str.strip().astype(bool)
-            ]
-            dup_desc = df_dup[
-            df_dup.duplicated("Description", keep=False) & df_dup["Description"].str.strip().astype(bool)
-            ]
-            dup_h1 = df_dup[
-            df_dup.duplicated("H1", keep=False) & df_dup["H1"].str.strip().astype(bool)
-            ]
-            
+    if meta.get("blocked"):
+        st.error(f"🚫 Crawling blocked by robots.txt: {meta.get('robots_url')}")
+        st.warning("💡 You may toggle 'Ignore robots.txt' to override (use responsibly).")
+    elif df is None or df.empty:
+        st.warning("⚠️ No pages were crawled. Please check your URL and try again.")
+    else:
+        progress_bar.progress(1.0)
+        status_text.empty()
+        
+        # Success message with stats
+        with st.container():
+            st.success(f"✅ Crawl completed successfully")
             col1, col2, col3 = st.columns(3)
-
             with col1:
-                st.markdown("**Duplicate Titles**")
-                if not dup_titles.empty:
-                    st.dataframe(dup_titles[["URL", "Title"]], height=220, use_container_width=True)
-                    st.metric("Count", len(dup_titles))
-                else:
-                    st.success("None ✅")
-                    st.metric("Count", "0")
-
+                st.metric("Pages Crawled", len(df), "")
             with col2:
-                st.markdown("**Duplicate Descriptions**")
-                if not dup_desc.empty:
-                    st.dataframe(dup_desc[["URL", "Description"]], height=220, use_container_width=True)
-                    st.metric("Count", len(dup_desc))
-                else:
-                    st.success("None ✅")
-                    st.metric("Count", "0")
-
+                successful = len(df[df["Crawl Status"] == "Success"])
+                st.metric("Successful", successful, f"{int(successful/len(df)*100)}%")
             with col3:
-                st.markdown("**Duplicate H1s**")
-                if not dup_h1.empty:
-                    st.dataframe(dup_h1[["URL", "H1"]], height=220, use_container_width=True)
-                    st.metric("Count", len(dup_h1))
-                else:
-                    st.success("None ✅")
-                    st.metric("Count", "0")
+                errors = len(df[df["Crawl Status"] != "Success"])
+                st.metric("Errors/Blocked", errors, "")
+        
+        st.markdown("---")
 
-            st.markdown("---")
+        df_display = df.copy()
+        cols_order = ["URL", "Status", "Crawl Status", "Title", "Title Length",
+                      "Description", "Description Length", "H1", "Word Count",
+                      "Internal Links", "External Links", "Link-to-Word Ratio",
+                      "Schema", "Content Type", "MIME Type", "Crawl Time (s)"]
+        cols_order = [c for c in cols_order if c in df_display.columns] + \
+                     [c for c in df_display.columns if c not in cols_order]
+        df_display = df_display[cols_order]
 
-            # after df_filtered is computed (and it contains the HTML column):
-            org.render_streamlit_organic_ui(st, df_filtered, html_col="HTML")
+        # Crawl Results with tabs
+        st.subheader("📋 Crawl Results")
+        tab1, tab2, tab3 = st.tabs(["All Pages", "By Content Type", "By Status"])
+        
+        with tab1:
+            # MIME filter
+            mime_options = sorted(df_display["MIME Type"].dropna().unique())
+            selected_mime = st.multiselect(
+                "Filter by MIME Type:",
+                mime_options,
+                default=mime_options,
+                key="mime_filter"
+            )
+            df_filtered = df_display[df_display["MIME Type"].isin(selected_mime)]
+            st.dataframe(df_filtered, use_container_width=True, height=400)
+        
+        with tab2:
+            content_types = df_display["Content Type"].dropna().unique()
+            selected_type = st.selectbox(
+                "Select content type:",
+                options=content_types,
+                key="content_type_filter"
+            )
+            df_content = df_display[df_display["Content Type"] == selected_type]
+            st.dataframe(df_content, use_container_width=True, height=400)
+            st.caption(f"Showing {len(df_content)} pages of type '{selected_type}'")
+        
+        with tab3:
+            status_types = sorted(df_display["Crawl Status"].dropna().unique())
+            selected_status = st.selectbox(
+                "Select crawl status:",
+                options=status_types,
+                key="status_filter"
+            )
+            df_status = df_display[df_display["Crawl Status"] == selected_status]
+            st.dataframe(df_status, use_container_width=True, height=400)
+            st.caption(f"Showing {len(df_status)} pages with status '{selected_status}'")
 
-            st.markdown("---")
+        # Charts
+        st.subheader("📊 Visual Insights")
+        chart_col1, chart_col2 = st.columns(2)
+        
+        with chart_col1:
+            st.markdown("**MIME Type Distribution**")
+            mime_dist = df_display["MIME Type"].value_counts()
+            st.bar_chart(mime_dist)
+        
+        with chart_col2:
+            st.markdown("**Content Type Distribution**")
+            content_dist = df_display["Content Type"].value_counts()
+            st.bar_chart(content_dist)
+        
+        # Additional charts
+        chart_col3, chart_col4 = st.columns(2)
+        
+        with chart_col3:
+            st.markdown("**HTTP Status Codes**")
+            status_dist = df_display["Status"].value_counts()
+            st.bar_chart(status_dist)
+        
+        with chart_col4:
+            st.markdown("**Average Crawl Time by Content Type**")
+            crawl_time_avg = df_display.groupby("Content Type")["Crawl Time (s)"].mean()
+            st.bar_chart(crawl_time_avg)
 
-            # Summary
-            st.subheader("📈 Site Summary & Metrics")
-            summary_col1, summary_col2, summary_col3, summary_col4 = st.columns(4)
-            
-            with summary_col1:
-                st.metric("Avg Title Length", f"{int(df_filtered['Title Length'].mean())} chars")
-            with summary_col2:
-                st.metric("Avg Meta Length", f"{int(df_filtered['Description Length'].mean())} chars")
-            with summary_col3:
-                st.metric("Avg Word Count", f"{int(df_filtered['Word Count'].mean())} words")
-            with summary_col4:
-                st.metric("Avg Crawl Time", f"{round(df_filtered['Crawl Time (s)'].mean(), 2)}s")
+        # Duplicate detection
+        st.subheader("🔁 Duplicate Content Detection")
+        st.markdown("Identify pages with duplicate titles, descriptions, and H1 tags.")
+        
+        df_dup = df_display.fillna("")
+        dup_titles = df_dup[
+            df_dup.duplicated("Title", keep=False) & df_dup["Title"].str.strip().astype(bool)
+        ]
+        dup_desc = df_dup[
+        df_dup.duplicated("Description", keep=False) & df_dup["Description"].str.strip().astype(bool)
+        ]
+        dup_h1 = df_dup[
+        df_dup.duplicated("H1", keep=False) & df_dup["H1"].str.strip().astype(bool)
+        ]
+        
+        col1, col2, col3 = st.columns(3)
 
-            st.markdown("---")
+        with col1:
+            st.markdown("**Duplicate Titles**")
+            if not dup_titles.empty:
+                st.dataframe(dup_titles[["URL", "Title"]], height=220, use_container_width=True)
+                st.metric("Count", len(dup_titles))
+            else:
+                st.success("None ✅")
+                st.metric("Count", "0")
 
-            # Excel export
-            st.subheader("📥 Export Reports")
-            towrite = io.BytesIO()
-            with pd.ExcelWriter(towrite, engine="xlsxwriter") as writer:
-                df_filtered.to_excel(writer, sheet_name="Crawl Results", index=False)
-                if not dup_titles.empty:
-                    dup_titles.to_excel(writer, sheet_name="Duplicate Titles", index=False)
-                if not dup_desc.empty:
-                    dup_desc.to_excel(writer, sheet_name="Duplicate Descriptions", index=False)
-                if not dup_h1.empty:
-                    dup_h1.to_excel(writer, sheet_name="Duplicate H1s", index=False)
-                summary = {
-                    "Pages Crawled": [len(df_filtered)],
-                    "Avg Title Length": [int(df_filtered['Title Length'].mean())],
-                    "Avg Description Length": [int(df_filtered['Description Length'].mean())],
-                    "Avg Word Count": [int(df_filtered['Word Count'].mean())],
-                    "Avg Crawl Time (s)": [round(df_filtered['Crawl Time (s)'].mean(), 2)]
-                }
-                pd.DataFrame(summary).to_excel(writer, sheet_name="Summary", index=False)
-                writer.close()
-            towrite.seek(0)
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.download_button(
-                    label="📊 Download Excel Report",
-                    data=towrite.getvalue(),
-                    file_name="seo_crawl_report.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
-                )
-            with col2:
-                csv_data = df_filtered.to_csv(index=False)
-                st.download_button(
-                    label="📄 Download CSV",
-                    data=csv_data,
-                    file_name="seo_crawl_results.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
+        with col2:
+            st.markdown("**Duplicate Descriptions**")
+            if not dup_desc.empty:
+                st.dataframe(dup_desc[["URL", "Description"]], height=220, use_container_width=True)
+                st.metric("Count", len(dup_desc))
+            else:
+                st.success("None ✅")
+                st.metric("Count", "0")
+
+        with col3:
+            st.markdown("**Duplicate H1s**")
+            if not dup_h1.empty:
+                st.dataframe(dup_h1[["URL", "H1"]], height=220, use_container_width=True)
+                st.metric("Count", len(dup_h1))
+            else:
+                st.success("None ✅")
+                st.metric("Count", "0")
+
+        st.markdown("---")
+
+        # after df_filtered is computed (and it contains the HTML column):
+        org.render_streamlit_organic_ui(st, df_filtered, html_col="HTML")
+
+        st.markdown("---")
+
+        # Summary
+        st.subheader("📈 Site Summary & Metrics")
+        summary_col1, summary_col2, summary_col3, summary_col4 = st.columns(4)
+        
+        with summary_col1:
+            st.metric("Avg Title Length", f"{int(df_filtered['Title Length'].mean())} chars")
+        with summary_col2:
+            st.metric("Avg Meta Length", f"{int(df_filtered['Description Length'].mean())} chars")
+        with summary_col3:
+            st.metric("Avg Word Count", f"{int(df_filtered['Word Count'].mean())} words")
+        with summary_col4:
+            st.metric("Avg Crawl Time", f"{round(df_filtered['Crawl Time (s)'].mean(), 2)}s")
+
+        st.markdown("---")
+
+        # Excel export
+        st.subheader("📥 Export Reports")
+        towrite = io.BytesIO()
+        with pd.ExcelWriter(towrite, engine="xlsxwriter") as writer:
+            df_filtered.to_excel(writer, sheet_name="Crawl Results", index=False)
+            if not dup_titles.empty:
+                dup_titles.to_excel(writer, sheet_name="Duplicate Titles", index=False)
+            if not dup_desc.empty:
+                dup_desc.to_excel(writer, sheet_name="Duplicate Descriptions", index=False)
+            if not dup_h1.empty:
+                dup_h1.to_excel(writer, sheet_name="Duplicate H1s", index=False)
+            summary = {
+                "Pages Crawled": [len(df_filtered)],
+                "Avg Title Length": [int(df_filtered['Title Length'].mean())],
+                "Avg Description Length": [int(df_filtered['Description Length'].mean())],
+                "Avg Word Count": [int(df_filtered['Word Count'].mean())],
+                "Avg Crawl Time (s)": [round(df_filtered['Crawl Time (s)'].mean(), 2)]
+            }
+            pd.DataFrame(summary).to_excel(writer, sheet_name="Summary", index=False)
+            writer.close()
+        towrite.seek(0)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.download_button(
+                label="📊 Download Excel Report",
+                data=towrite.getvalue(),
+                file_name="seo_crawl_report.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+        with col2:
+            csv_data = df_filtered.to_csv(index=False)
+            st.download_button(
+                label="📄 Download CSV",
+                data=csv_data,
+                file_name="seo_crawl_results.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
