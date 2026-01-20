@@ -612,14 +612,7 @@ if st.session_state.crawl_results is not None:
         with col2:
             st.markdown("")
             st.markdown("")
+            # Direct clickable link to keyword research page
             st.markdown("""
-            <div style="padding: 1rem; background-color: #f0f7ff; border-radius: 8px; border: 1px solid #d4e9ff;">
-            
-            **👉 Click the menu →**
-            
-            **keyword-research**
-            
-            in the sidebar
-            
-            </div>
-            """, unsafe_allow_html=True)
+            [🔍 **Go to Keyword Research** →](keyword-research)
+            """, unsafe_allow_html=False)
