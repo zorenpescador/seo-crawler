@@ -224,6 +224,18 @@ def render_streamlit_organic_ui(st, df: pd.DataFrame, html_col: str = "HTML"):
         st.markdown("**Analyze individual pages**")
         st.markdown("Select a page to view its top suggested keywords and page metadata.")
         
+        # TF-IDF explanation
+        with st.expander("ℹ️ What is TF-IDF?"):
+            st.markdown("""
+            **TF-IDF** (Term Frequency-Inverse Document Frequency) is a statistical measure that evaluates how important a word is to a document within your site:
+            
+            - **Term Frequency (TF)**: How often a word appears on the page
+            - **Inverse Document Frequency (IDF)**: How unique/rare the word is across your site
+            - **Combined Score**: Words that appear frequently on a page but rarely elsewhere score higher
+            
+            **Why it matters**: TF-IDF helps identify the most distinctive keywords for each page, which are often the best candidates for optimization.
+            """)
+        
         url_map = analyzed["URL"].fillna("").tolist() if "URL" in analyzed.columns else [""] * len(analyzed)
         
         # Use selectbox with persistent session state (no callback to avoid rerun issues)
