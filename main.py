@@ -10,6 +10,7 @@ import re
 import time
 import io
 import organic_research as org
+import keyword_research as kr
 
 # ---------------------------
 # Helper utilities
@@ -521,8 +522,18 @@ if st.session_state.crawl_results is not None:
 
         st.markdown("---")
 
-        # after df_filtered is computed (and it contains the HTML column):
-        org.render_streamlit_organic_ui(st, df_filtered, html_col="HTML")
+        # Main Analysis Tabs
+        analysis_tab1, analysis_tab2 = st.tabs([
+            "📊 Organic Research",
+            "📈 Advanced Metrics"
+        ])
+        
+        with analysis_tab1:
+            # after df_filtered is computed (and it contains the HTML column):
+            org.render_streamlit_organic_ui(st, df_filtered, html_col="HTML")
+        
+        with analysis_tab2:
+            st.markdown("---")
 
         st.markdown("---")
 
