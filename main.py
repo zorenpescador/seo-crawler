@@ -612,4 +612,5 @@ if st.session_state.crawl_results is not None:
         with col2:
             st.markdown("")
             st.markdown("")
-            st.info("👉 Visit **Keyword Research** page in the sidebar to get started!")
+            if st.button("🔍 Go to Keyword Research →", use_container_width=True, key="nav_to_kr"):
+                st.switch_page("pages/2_kw_research_view.py")
