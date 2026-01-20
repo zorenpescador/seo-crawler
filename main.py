@@ -198,42 +198,192 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
 # ---------------------------
 # Streamlit UI
 # ---------------------------
-st.set_page_config(page_title="Advanced SEO Site Crawler", layout="wide")
+st.set_page_config(page_title="Advanced SEO Site Crawler", layout="wide", initial_sidebar_state="expanded")
+
+# Custom CSS for better styling
+st.markdown("""
+<style>
+    /* Main heading styling */
+    h1 {
+        color: #1f77b4;
+        margin-bottom: 0.5rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 3px solid #1f77b4;
+    }
+    
+    h2 {
+        color: #2c3e50;
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    h3 {
+        color: #34495e;
+    }
+    
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {
+        background-color: #f8f9fa;
+    }
+    
+    /* Button styling */
+    .stButton > button {
+        width: 100%;
+        height: 2.5rem;
+        font-size: 1rem;
+        font-weight: 600;
+        background: linear-gradient(135deg, #1f77b4 0%, #1a5fa0 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .stButton > button:hover {
+        background: linear-gradient(135deg, #1a5fa0 0%, #14468a 100%);
+        box-shadow: 0 4px 12px rgba(31, 119, 180, 0.3);
+        transform: translateY(-2px);
+    }
+    
+    /* Input field styling */
+    .stTextInput > div > div > input,
+    .stNumberInput > div > div > input,
+    .stSlider > div > div {
+        border-radius: 6px;
+        border: 2px solid #e0e0e0;
+        transition: all 0.2s ease;
+    }
+    
+    .stTextInput > div > div > input:focus,
+    .stNumberInput > div > div > input:focus {
+        border: 2px solid #1f77b4;
+        box-shadow: 0 0 0 3px rgba(31, 119, 180, 0.1);
+    }
+    
+    /* Info/warning/error box styling */
+    .stAlert {
+        border-radius: 8px;
+        padding: 1.25rem;
+        border-left: 5px solid;
+    }
+    
+    /* Dataframe styling */
+    [data-testid="stDataFrame"] {
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    
+    /* Progress bar styling */
+    .stProgress > div > div > div {
+        background: linear-gradient(90deg, #1f77b4, #4da6ff);
+    }
+    
+    /* Metric boxes */
+    [data-testid="stMetric"] {
+        background-color: #f0f7ff;
+        padding: 1rem;
+        border-radius: 8px;
+        border: 1px solid #d4e9ff;
+    }
+    
+    /* General spacing improvement */
+    .stMarkdown {
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Better separation between sections */
+    hr {
+        margin: 2rem 0;
+        border: 1px solid #e0e0e0;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.title("🔎 Advanced SEO Site Crawler")
+st.markdown("**Comprehensive SEO analysis and site crawling tool** - Analyze your website's structure, content, and optimization metrics.", unsafe_allow_html=True)
 
 with st.sidebar:
-    st.markdown("### Crawl Settings")
-    seed_url = st.text_input("Enter site URL (include https://):", value="https://example.com")
-    max_pages = st.number_input("Max pages to crawl", min_value=1, max_value=2000, value=200, step=10)
-    delay = st.slider("Delay between requests (seconds)", 0.0, 5.0, 0.5, 0.1)
-    ignore_robots = st.checkbox("Ignore robots.txt (testing only; use responsibly)", value=False)
-    run_button = st.button("Start Crawl", key="start")
+    st.markdown("## ⚙️ Crawl Settings")
+    st.markdown("---")
+    
+    seed_url = st.text_input(
+        "Enter site URL",
+        value="https://example.com",
+        placeholder="https://example.com",
+        help="Include the protocol (http:// or https://)"
+    )
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        max_pages = st.number_input(
+            "Max pages",
+            min_value=1,
+            max_value=2000,
+            value=200,
+            step=10,
+            help="Maximum number of pages to crawl"
+        )
+    with col2:
+        delay = st.slider(
+            "Request delay",
+            0.0,
+            5.0,
+            0.5,
+            0.1,
+            help="Delay between requests in seconds (be respectful)"
+        )
+    
+    ignore_robots = st.checkbox(
+        "Ignore robots.txt",
+        value=False,
+        help="⚠️ Testing only - respects site's crawling rules by default"
+    )
+    
+    st.markdown("---")
+    run_button = st.button("🚀 Start Crawl", key="start", use_container_width=True)
 
 status_area = st.empty()
 progress_bar = st.progress(0.0)
+status_text = st.empty()
 
 if run_button:
     if not seed_url.startswith("http"):
-        st.error("Please provide a valid URL starting with http:// or https://")
+        st.error("❌ Please provide a valid URL starting with http:// or https://")
     else:
         def show_progress(pct, message):
             try:
                 progress_bar.progress(min(max(pct, 0.0), 1.0))
             except Exception:
                 pass
-            status_area.markdown(f"**{message}**")
+            status_text.markdown(f"⏳ **{message}**")
 
-        status_area.info("Preparing to crawl...")
+        status_area.info("🔍 Preparing to crawl...")
         df, meta = crawl_site(seed_url, max_pages=max_pages, delay=delay, ignore_robots=ignore_robots, show_progress_cb=show_progress)
 
         if meta.get("blocked"):
-            st.error(f"⛔ Crawling blocked by robots.txt: {meta.get('robots_url')}")
-            st.warning("You may toggle 'Ignore robots.txt' to override (use responsibly).")
+            st.error(f"🚫 Crawling blocked by robots.txt: {meta.get('robots_url')}")
+            st.warning("💡 You may toggle 'Ignore robots.txt' to override (use responsibly).")
         elif df is None or df.empty:
-            st.warning("⚠️ No pages crawled.")
+            st.warning("⚠️ No pages were crawled. Please check your URL and try again.")
         else:
             progress_bar.progress(1.0)
-            st.success(f"✅ Crawl completed — {len(df)} pages collected")
+            status_text.empty()
+            
+            # Success message with stats
+            with st.container():
+                st.success(f"✅ Crawl completed successfully")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Pages Crawled", len(df), "")
+                with col2:
+                    successful = len(df[df["Crawl Status"] == "Success"])
+                    st.metric("Successful", successful, f"{int(successful/len(df)*100)}%")
+                with col3:
+                    errors = len(df[df["Crawl Status"] != "Success"])
+                    st.metric("Errors/Blocked", errors, "")
+            
+            st.markdown("---")
 
             df_display = df.copy()
             cols_order = ["URL", "Status", "Crawl Status", "Title", "Title Length",
@@ -244,26 +394,76 @@ if run_button:
                          [c for c in df_display.columns if c not in cols_order]
             df_display = df_display[cols_order]
 
-            # MIME filter
-            st.subheader("Crawl Results")
-            mime_options = sorted(df_display["MIME Type"].dropna().unique())
-            selected_mime = st.multiselect("Filter by MIME Type:", mime_options, default=mime_options)
-            df_filtered = df_display[df_display["MIME Type"].isin(selected_mime)]
-            st.dataframe(df_filtered, use_container_width=True)
+            # Crawl Results with tabs
+            st.subheader("📋 Crawl Results")
+            tab1, tab2, tab3 = st.tabs(["All Pages", "By Content Type", "By Status"])
+            
+            with tab1:
+                # MIME filter
+                mime_options = sorted(df_display["MIME Type"].dropna().unique())
+                selected_mime = st.multiselect(
+                    "Filter by MIME Type:",
+                    mime_options,
+                    default=mime_options,
+                    key="mime_filter"
+                )
+                df_filtered = df_display[df_display["MIME Type"].isin(selected_mime)]
+                st.dataframe(df_filtered, use_container_width=True, height=400)
+            
+            with tab2:
+                content_types = df_display["Content Type"].dropna().unique()
+                selected_type = st.selectbox(
+                    "Select content type:",
+                    options=content_types,
+                    key="content_type_filter"
+                )
+                df_content = df_display[df_display["Content Type"] == selected_type]
+                st.dataframe(df_content, use_container_width=True, height=400)
+                st.caption(f"Showing {len(df_content)} pages of type '{selected_type}'")
+            
+            with tab3:
+                status_types = sorted(df_display["Crawl Status"].dropna().unique())
+                selected_status = st.selectbox(
+                    "Select crawl status:",
+                    options=status_types,
+                    key="status_filter"
+                )
+                df_status = df_display[df_display["Crawl Status"] == selected_status]
+                st.dataframe(df_status, use_container_width=True, height=400)
+                st.caption(f"Showing {len(df_status)} pages with status '{selected_status}'")
 
             # Charts
             st.subheader("📊 Visual Insights")
-            col1, col2 = st.columns(2)
-            with col1:
+            chart_col1, chart_col2 = st.columns(2)
+            
+            with chart_col1:
                 st.markdown("**MIME Type Distribution**")
-                st.bar_chart(df_filtered["MIME Type"].value_counts())
-            with col2:
+                mime_dist = df_display["MIME Type"].value_counts()
+                st.bar_chart(mime_dist)
+            
+            with chart_col2:
                 st.markdown("**Content Type Distribution**")
-                st.bar_chart(df_filtered["Content Type"].value_counts())
+                content_dist = df_display["Content Type"].value_counts()
+                st.bar_chart(content_dist)
+            
+            # Additional charts
+            chart_col3, chart_col4 = st.columns(2)
+            
+            with chart_col3:
+                st.markdown("**HTTP Status Codes**")
+                status_dist = df_display["Status"].value_counts()
+                st.bar_chart(status_dist)
+            
+            with chart_col4:
+                st.markdown("**Average Crawl Time by Content Type**")
+                crawl_time_avg = df_display.groupby("Content Type")["Crawl Time (s)"].mean()
+                st.bar_chart(crawl_time_avg)
 
             # Duplicate detection
             st.subheader("🔁 Duplicate Content Detection")
-            df_dup = df_filtered.fillna("")
+            st.markdown("Identify pages with duplicate titles, descriptions, and H1 tags.")
+            
+            df_dup = df_display.fillna("")
             dup_titles = df_dup[
                 df_dup.duplicated("Title", keep=False) & df_dup["Title"].str.strip().astype(bool)
             ]
@@ -276,51 +476,57 @@ if run_button:
             
             col1, col2, col3 = st.columns(3)
 
-            # create placeholders so layout stays consistent
-            ph1 = col1.empty()
-            ph2 = col2.empty()
-            ph3 = col3.empty()
+            with col1:
+                st.markdown("**Duplicate Titles**")
+                if not dup_titles.empty:
+                    st.dataframe(dup_titles[["URL", "Title"]], height=220, use_container_width=True)
+                    st.metric("Count", len(dup_titles))
+                else:
+                    st.success("None ✅")
+                    st.metric("Count", "0")
 
-            # choose a fixed height for dataframes so columns line up visually
-            df_height = 220
-            
-            # Duplicate Titles
-            ph1.markdown("**Duplicate Titles**")
-            if not dup_titles.empty:
-                ph1.dataframe(dup_titles[["URL", "Title"]], height=df_height, use_container_width=True)
-            else:
-                ph1.info("None ✅")
-                ph1.write("")  # small spacer to help match height
+            with col2:
+                st.markdown("**Duplicate Descriptions**")
+                if not dup_desc.empty:
+                    st.dataframe(dup_desc[["URL", "Description"]], height=220, use_container_width=True)
+                    st.metric("Count", len(dup_desc))
+                else:
+                    st.success("None ✅")
+                    st.metric("Count", "0")
 
-            # Duplicate Meta Descriptions
-            ph2.markdown("**Duplicate Meta Descriptions**")
-            if not dup_desc.empty:
-                ph2.dataframe(dup_desc[["URL", "Description"]], height=df_height, use_container_width=True)
-            else:
-                ph2.info("None ✅")
-                ph2.write("")
+            with col3:
+                st.markdown("**Duplicate H1s**")
+                if not dup_h1.empty:
+                    st.dataframe(dup_h1[["URL", "H1"]], height=220, use_container_width=True)
+                    st.metric("Count", len(dup_h1))
+                else:
+                    st.success("None ✅")
+                    st.metric("Count", "0")
 
-            # Duplicate H1s
-            ph3.markdown("**Duplicate H1s**")
-            if not dup_h1.empty:
-                ph3.dataframe(dup_h1[["URL", "H1"]], height=df_height, use_container_width=True)
-            else:
-                ph3.info("None ✅")
-                ph3.write("")
+            st.markdown("---")
 
             # after df_filtered is computed (and it contains the HTML column):
             org.render_streamlit_organic_ui(st, df_filtered, html_col="HTML")
 
+            st.markdown("---")
+
             # Summary
-            st.subheader("📊 Site Summary")
-            st.markdown(f"- Pages crawled: **{len(df_filtered)}**")
-            st.markdown(f"- Avg title length: **{int(df_filtered['Title Length'].mean())}** chars")
-            st.markdown(f"- Avg description length: **{int(df_filtered['Description Length'].mean())}** chars")
-            st.markdown(f"- Avg word count: **{int(df_filtered['Word Count'].mean())}** words")
-            st.markdown(f"- Avg crawl time: **{round(df_filtered['Crawl Time (s)'].mean(),2)}s/page**")
+            st.subheader("📈 Site Summary & Metrics")
+            summary_col1, summary_col2, summary_col3, summary_col4 = st.columns(4)
+            
+            with summary_col1:
+                st.metric("Avg Title Length", f"{int(df_filtered['Title Length'].mean())} chars")
+            with summary_col2:
+                st.metric("Avg Meta Length", f"{int(df_filtered['Description Length'].mean())} chars")
+            with summary_col3:
+                st.metric("Avg Word Count", f"{int(df_filtered['Word Count'].mean())} words")
+            with summary_col4:
+                st.metric("Avg Crawl Time", f"{round(df_filtered['Crawl Time (s)'].mean(), 2)}s")
+
+            st.markdown("---")
 
             # Excel export
-            st.subheader("📥 Export / Download")
+            st.subheader("📥 Export Reports")
             towrite = io.BytesIO()
             with pd.ExcelWriter(towrite, engine="xlsxwriter") as writer:
                 df_filtered.to_excel(writer, sheet_name="Crawl Results", index=False)
@@ -340,9 +546,22 @@ if run_button:
                 pd.DataFrame(summary).to_excel(writer, sheet_name="Summary", index=False)
                 writer.close()
             towrite.seek(0)
-            st.download_button(
-                label="⬇️ Download Excel Report",
-                data=towrite.getvalue(),
-                file_name="seo_crawl_report.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.download_button(
+                    label="📊 Download Excel Report",
+                    data=towrite.getvalue(),
+                    file_name="seo_crawl_report.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+            with col2:
+                csv_data = df_filtered.to_csv(index=False)
+                st.download_button(
+                    label="📄 Download CSV",
+                    data=csv_data,
+                    file_name="seo_crawl_results.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )

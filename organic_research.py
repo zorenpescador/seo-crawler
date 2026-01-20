@@ -187,7 +187,7 @@ def analyze_organic_candidates(
 # ---------- Streamlit UI helper ----------
 def render_streamlit_organic_ui(st, df: pd.DataFrame, html_col: str = "HTML"):
     """
-    Renders a compact Streamlit UI for organic research:
+    Renders a modern, interactive Streamlit UI for organic research:
       - compute analysis (cached) and show per-URL top terms
       - show global top keywords across corpus
       - allow export of suggestions as CSV
@@ -196,8 +196,10 @@ def render_streamlit_organic_ui(st, df: pd.DataFrame, html_col: str = "HTML"):
     import pandas as _pd
 
     st.subheader("🧭 Organic Research (On-page candidates)")
+    st.markdown("Discover keyword opportunities using TF-IDF analysis to identify high-potential terms for each page.")
+    
     if html_col not in df.columns:
-        st.info(f"Column '{html_col}' not found in dataframe. Set html_col to column with HTML.")
+        st.error(f"❌ Column '{html_col}' not found in dataframe. Please set html_col to the correct column name.")
         return
 
     # cache the heavy compute
@@ -215,63 +217,144 @@ def render_streamlit_organic_ui(st, df: pd.DataFrame, html_col: str = "HTML"):
     if "URL" not in analyzed.columns and len(serialized[2]) > 0:
         analyzed["URL"] = serialized[2]
 
-    # Initialize session state for selected URL
-    if "organic_selected_url" not in st.session_state:
-        st.session_state.organic_selected_url = "(none)"
+    # Create tabs for better organization
+    tab1, tab2, tab3 = st.tabs(["Per-Page Analysis", "Global Keywords", "Export"])
+    
+    with tab1:
+        st.markdown("**Analyze individual pages**")
+        st.markdown("Select a page to view its top suggested keywords and page metadata.")
+        
+        # Initialize session state for selected URL
+        if "organic_selected_url" not in st.session_state:
+            st.session_state.organic_selected_url = "(none)"
 
-    # let user pick a URL to inspect
-    st.markdown("**Inspect pages**")
-    url_map = analyzed["URL"].fillna("").tolist() if "URL" in analyzed.columns else [""] * len(analyzed)
-    
-    # Create a callback to update session state without triggering full rerun
-    def on_url_change():
-        st.session_state.organic_selected_url = st.session_state.url_selectbox_widget
-    
-    chosen = st.selectbox(
-        "Choose a URL to inspect", 
-        options=["(none)"] + url_map, 
-        key="url_selectbox_widget",
-        on_change=on_url_change,
-        index=0
-    )
-    
-    # Use session state value instead of chosen to prevent rerun cascades
-    selected = st.session_state.organic_selected_url
-    
-    if selected and selected != "(none)":
-        row = analyzed[analyzed["URL"] == selected].iloc[0]
-        st.markdown("**Top suggested keywords (TF-IDF)**")
-        if row["keywords"]:
-            kw_table = _pd.DataFrame(row["keywords"])
-            st.dataframe(kw_table, use_container_width=True)
+        url_map = analyzed["URL"].fillna("").tolist() if "URL" in analyzed.columns else [""] * len(analyzed)
+        
+        # Create a callback to update session state without triggering full rerun
+        def on_url_change():
+            st.session_state.organic_selected_url = st.session_state.url_selectbox_widget
+        
+        chosen = st.selectbox(
+            "Choose a URL to inspect", 
+            options=["(none)"] + url_map, 
+            key="url_selectbox_widget",
+            on_change=on_url_change,
+            index=0,
+            help="Select a page to analyze its keywords and metadata"
+        )
+        
+        # Use session state value instead of chosen to prevent rerun cascades
+        selected = st.session_state.organic_selected_url
+        
+        if selected and selected != "(none)":
+            row = analyzed[analyzed["URL"] == selected].iloc[0]
+            
+            # Keywords table
+            st.markdown("**Top Suggested Keywords (TF-IDF)**")
+            if row["keywords"]:
+                kw_table = _pd.DataFrame(row["keywords"])
+                st.dataframe(kw_table, use_container_width=True)
+                st.caption(f"Search Intent: **{row.get('top_term_intent', 'unknown').title()}**")
+            else:
+                st.info("ℹ️ No candidate keywords found for this page.")
+            
+            # Page metadata
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**Title**")
+                st.code(row.get("title", "(not found)"), language="text")
+            with col2:
+                st.markdown("**Meta Description**")
+                st.code(row.get("meta_description", "(not found)"), language="text")
+            
+            st.markdown("**H1 Tag**")
+            st.code(row.get("h1", "(not found)"), language="text")
         else:
-            st.info("No candidate keywords found for this page.")
-        st.markdown("**Page excerpts**")
-        st.write("Title:", row.get("title", ""))
-        st.write("Meta description:", row.get("meta_description", ""))
-        st.write("H1:", row.get("h1", ""))
+            st.info("📌 Select a page from the dropdown above to view its analysis.")
+    
+    with tab2:
+        st.markdown("**Global keyword analysis across filtered pages**")
+        st.markdown("These are the most important keywords appearing across your entire site.")
+        
+        # flatten all keywords and aggregate scores
+        agg = {}
+        for kws in analyzed["keywords"]:
+            for k in kws:
+                agg[k["term"]] = agg.get(k["term"], 0.0) + k["score"]
+        
+        if agg:
+            agg_df = _pd.DataFrame(
+                sorted(agg.items(), key=lambda x: -x[1]), columns=["term", "aggregate_score"]
+            ).head(50)
+            
+            # Display metrics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Unique Keywords", len(agg))
+            with col2:
+                st.metric("Top Keyword", agg_df.iloc[0]["term"] if not agg_df.empty else "N/A")
+            with col3:
+                intent_dist = analyzed["top_term_intent"].value_counts()
+                st.metric("Most Common Intent", intent_dist.index[0].title() if len(intent_dist) > 0 else "Unknown")
+            
+            st.dataframe(agg_df, use_container_width=True, height=400)
+        else:
+            st.warning("⚠️ No keywords found in the current corpus.")
 
-    # show global top keywords across corpus
-    st.markdown("**Global top keywords across filtered pages**")
-    # flatten all keywords and aggregate scores
-    agg = {}
-    for kws in analyzed["keywords"]:
-        for k in kws:
-            agg[k["term"]] = agg.get(k["term"], 0.0) + k["score"]
-    if agg:
-        agg_df = _pd.DataFrame(
-            sorted(agg.items(), key=lambda x: -x[1]), columns=["term", "aggregate_score"]
-        ).head(50)
-        st.dataframe(agg_df, use_container_width=True)
-    else:
-        st.info("No keywords found in the current corpus.")
-
-    # CSV export
-    st.markdown("**Export suggestions**")
-    if not analyzed.empty:
-        export_df = analyzed[["top_terms", "top_term_intent"]].copy()
-        export_df["URL"] = analyzed.get("URL", "")
-        csv = export_df.to_csv(index=False)
-        st.download_button("Download CSV (top_terms)", data=csv, file_name="organic_suggestions.csv", mime="text/csv")
-    else:
-        st.info("No analysis to export.")
+    with tab3:
+        st.markdown("**Export your organic research data**")
+        
+        if not analyzed.empty:
+            export_df = analyzed[["top_terms", "top_term_intent"]].copy()
+            export_df["URL"] = analyzed.get("URL", "")
+            
+            # Reorder columns
+            export_df = export_df[["URL", "top_terms", "top_term_intent"]]
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                csv = export_df.to_csv(index=False)
+                st.download_button(
+                    "📄 Download CSV (Keywords)",
+                    data=csv,
+                    file_name="organic_suggestions.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            
+            with col2:
+                # Create a detailed Excel export
+                import io
+                towrite = io.BytesIO()
+                with _pd.ExcelWriter(towrite, engine="xlsxwriter") as writer:
+                    export_df.to_excel(writer, sheet_name="Keywords by URL", index=False)
+                    
+                    # Global keywords sheet
+                    agg = {}
+                    for kws in analyzed["keywords"]:
+                        for k in kws:
+                            agg[k["term"]] = agg.get(k["term"], 0.0) + k["score"]
+                    if agg:
+                        global_df = _pd.DataFrame(
+                            sorted(agg.items(), key=lambda x: -x[1]), 
+                            columns=["Keyword", "Score"]
+                        )
+                        global_df.to_excel(writer, sheet_name="Global Keywords", index=False)
+                    
+                    writer.close()
+                towrite.seek(0)
+                
+                st.download_button(
+                    "📊 Download Excel (Detailed)",
+                    data=towrite.getvalue(),
+                    file_name="organic_research_detailed.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+            
+            # Preview table
+            st.markdown("**Preview**")
+            st.dataframe(export_df.head(10), use_container_width=True)
+        else:
+            st.warning("⚠️ No analysis data available to export.")
