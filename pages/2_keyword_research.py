@@ -77,4 +77,3 @@ if all_keywords:
 else:
     if input_method == "Paste Content":
         st.info("💡 Paste content above to begin analysis")
-
