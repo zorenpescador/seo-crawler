@@ -224,27 +224,15 @@ def render_streamlit_organic_ui(st, df: pd.DataFrame, html_col: str = "HTML"):
         st.markdown("**Analyze individual pages**")
         st.markdown("Select a page to view its top suggested keywords and page metadata.")
         
-        # Initialize session state for selected URL
-        if "organic_selected_url" not in st.session_state:
-            st.session_state.organic_selected_url = "(none)"
-
         url_map = analyzed["URL"].fillna("").tolist() if "URL" in analyzed.columns else [""] * len(analyzed)
         
-        # Create a callback to update session state without triggering full rerun
-        def on_url_change():
-            st.session_state.organic_selected_url = st.session_state.url_selectbox_widget
-        
-        chosen = st.selectbox(
+        # Use selectbox with persistent session state (no callback to avoid rerun issues)
+        selected = st.selectbox(
             "Choose a URL to inspect", 
-            options=["(none)"] + url_map, 
-            key="url_selectbox_widget",
-            on_change=on_url_change,
-            index=0,
+            options=["(none)"] + url_map,
+            key="organic_url_selection",
             help="Select a page to analyze its keywords and metadata"
         )
-        
-        # Use session state value instead of chosen to prevent rerun cascades
-        selected = st.session_state.organic_selected_url
         
         if selected and selected != "(none)":
             row = analyzed[analyzed["URL"] == selected].iloc[0]
