@@ -612,5 +612,14 @@ if st.session_state.crawl_results is not None:
         with col2:
             st.markdown("")
             st.markdown("")
-            if st.button("🔍 Go to Keyword Research →", use_container_width=True, key="nav_to_kr"):
-                st.switch_page("pages/2_keyword_research.py")
+            st.markdown("""
+            <div style="padding: 1rem; background-color: #f0f7ff; border-radius: 8px; border: 1px solid #d4e9ff;">
+            
+            **👉 Click the menu →**
+            
+            **keyword-research**
+            
+            in the sidebar
+            
+            </div>
+            """, unsafe_allow_html=True)
