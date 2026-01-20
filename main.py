@@ -592,3 +592,24 @@ if st.session_state.crawl_results is not None:
                 mime="text/csv",
                 use_container_width=True
             )
+
+        st.markdown("---")
+
+        # Promote Keyword Research Tool
+        st.subheader("🔍 Next Steps: Keyword Research")
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.markdown("""
+            Ready to dive deeper into keyword analysis? Use the **Keyword Research Tool** to:
+            - 📊 Analyze keyword frequency across your site
+            - 🎯 Identify high-value optimization opportunities
+            - 📈 Discover search intent patterns
+            - 🔗 Find related keyword clusters
+            - 📄 Generate keyword variations
+            
+            The tool is **independent** and can also analyze competitor content or custom text!
+            """)
+        with col2:
+            st.markdown("")
+            st.markdown("")
+            st.info("👉 Visit **Keyword Research** page in the sidebar to get started!")
