@@ -66,6 +66,26 @@ def extract_schema_types(soup):
             continue
     return ", ".join(schema_types)
 
+
+def extract_meta_tag(soup, name=None, property_name=None):
+    if name:
+        tag = soup.find("meta", attrs={"name": name})
+        if tag and tag.get("content"):
+            return tag["content"].strip()
+    if property_name:
+        tag = soup.find("meta", attrs={"property": property_name})
+        if tag and tag.get("content"):
+            return tag["content"].strip()
+    return ""
+
+
+def extract_canonical_url(soup, page_url):
+    canon = soup.find("link", attrs={"rel": "canonical"})
+    href = canon.get("href") if canon and canon.get("href") else ""
+    if href:
+        return normalize_url(urljoin(page_url, href))
+    return ""
+
 def detect_content_type(url, soup):
     u = url.lower()
     if re.search(r"/blog/|/news/|/posts/|/articles/", u) or soup.find("article"):
@@ -124,10 +144,10 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
                 results.append({
                     "URL": url, "Status": status_code, "Crawl Status": "HTTP Error",
                     "Title": "", "Title Length": 0, "Description": "", "Description Length": 0,
-                    "H1": "", "H Tags": "", "Word Count": 0,
+                    "H1": "", "H Tags": "", "Word Count": 0, "Heading Count": 0, "Image Count": 0,
                     "Internal Links": 0, "External Links": 0, "Link-to-Word Ratio": 0,
                     "Schema": "", "Content Type": "", "MIME Type": r.headers.get("Content-Type", ""),
-                    "Crawl Time (s)": crawl_time, "HTML": ""
+                    "Canonical URL": "", "OG Title": "", "OG Description": "", "Crawl Time (s)": crawl_time, "HTML": ""
                 })
                 visited.add(url)
                 time.sleep(delay)
@@ -156,12 +176,17 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
 
             text = soup.get_text(" ", strip=True)
             word_count = len(text.split())
+            heading_count = sum(1 for _ in soup.find_all(re.compile(r"^h[1-6]$")))
+            image_count = len(soup.find_all("img"))
             total_links = len(internal_links) + len(external_links)
             link_to_word = round(total_links / word_count, 3) if word_count else 0
 
             schema = extract_schema_types(soup)
             content_type = detect_content_type(url, soup)
             mime_type = r.headers.get("Content-Type", "")
+            canonical_url = extract_canonical_url(soup, url)
+            og_title = extract_meta_tag(soup, property_name="og:title")
+            og_description = extract_meta_tag(soup, property_name="og:description")
 
             html_excerpt = r.text if len(r.text) <= 12000 else r.text[:12000] + "… [truncated]"
             results.append({
@@ -169,9 +194,11 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
                 "Title": title, "Title Length": len(title),
                 "Description": desc, "Description Length": len(desc),
                 "H1": h1, "H Tags": json.dumps(h_tags, ensure_ascii=False),
-                "Word Count": word_count, "Internal Links": len(set(internal_links)),
+                "Word Count": word_count, "Heading Count": heading_count, "Image Count": image_count,
+                "Internal Links": len(set(internal_links)),
                 "External Links": len(set(external_links)), "Link-to-Word Ratio": link_to_word,
                 "Schema": schema, "Content Type": content_type, "MIME Type": mime_type,
+                "Canonical URL": canonical_url, "OG Title": og_title, "OG Description": og_description,
                 "Crawl Time (s)": crawl_time, "HTML": html_excerpt
             })
 
@@ -188,8 +215,9 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
             results.append({
                 "URL": url, "Status": "Error", "Crawl Status": f"Error: {e}",
                 "Title": "", "Title Length": 0, "Description": "", "Description Length": 0,
-                "H1": "", "H Tags": "", "Word Count": 0, "Internal Links": 0, "External Links": 0,
-                "Link-to-Word Ratio": 0, "Schema": "", "Content Type": "", "MIME Type": "",
+                "H1": "", "H Tags": "", "Word Count": 0, "Heading Count": 0, "Image Count": 0,
+                "Internal Links": 0, "External Links": 0, "Link-to-Word Ratio": 0, "Schema": "", "Content Type": "", "MIME Type": "",
+                "Canonical URL": "", "OG Title": "", "OG Description": "",
                 "Crawl Time (s)": 0, "HTML": ""
             })
             visited.add(url)
@@ -445,9 +473,10 @@ if st.session_state.crawl_results is not None:
             max_text_chars=4000,
         )
         cols_order = ["URL", "Status", "Crawl Status", "Title", "Title Length",
-                      "Description", "Description Length", "H1", "Word Count",
+                      "Description", "Description Length", "H1", "Word Count", "Heading Count", "Image Count",
                       "Internal Links", "External Links", "Link-to-Word Ratio",
-                      "Schema", "Content Type", "MIME Type", "Crawl Time (s)"]
+                      "Schema", "Content Type", "MIME Type", "Canonical URL", "OG Title", "OG Description",
+                      "Crawl Time (s)"]
         cols_order = [c for c in cols_order if c in df_display.columns] + \
                      [c for c in df_display.columns if c not in cols_order]
         df_display = df_display[cols_order]
@@ -591,6 +620,8 @@ if st.session_state.crawl_results is not None:
         with summary_col4:
             st.metric("Avg Crawl Time", f"{round(df_filtered['Crawl Time (s)'].mean(), 2)}s")
 
+        st.caption("Additional metrics captured: heading count, image count, canonical URL, OG title, and OG description.")
+
         st.markdown("---")
 
         # Excel export
@@ -610,6 +641,8 @@ if st.session_state.crawl_results is not None:
                 "Avg Title Length": [int(df_filtered['Title Length'].mean())],
                 "Avg Description Length": [int(df_filtered['Description Length'].mean())],
                 "Avg Word Count": [int(df_filtered['Word Count'].mean())],
+                "Avg Heading Count": [round(df_filtered['Heading Count'].mean(), 1)],
+                "Avg Image Count": [round(df_filtered['Image Count'].mean(), 1)],
                 "Avg Crawl Time (s)": [round(df_filtered['Crawl Time (s)'].mean(), 2)]
             }
             pd.DataFrame(summary).to_excel(writer, sheet_name="Summary", index=False)
