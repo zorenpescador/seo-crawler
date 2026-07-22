@@ -115,6 +115,7 @@ def ensure_result_columns(df):
         "Canonical URL": "",
         "OG Title": "",
         "OG Description": "",
+        "Content Text": "",
     }
 
     for column, default in required_columns.items():
@@ -166,7 +167,8 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
                     "H1": "", "H Tags": "", "Word Count": 0, "Heading Count": 0, "Image Count": 0,
                     "Internal Links": 0, "External Links": 0, "Link-to-Word Ratio": 0,
                     "Schema": "", "Content Type": "", "MIME Type": r.headers.get("Content-Type", ""),
-                    "Canonical URL": "", "OG Title": "", "OG Description": "", "Crawl Time (s)": crawl_time, "HTML": ""
+                    "Canonical URL": "", "OG Title": "", "OG Description": "", "Crawl Time (s)": crawl_time,
+                    "HTML": "", "Content Text": ""
                 })
                 visited.add(url)
                 time.sleep(delay)
@@ -208,6 +210,7 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
             og_description = extract_meta_tag(soup, property_name="og:description")
 
             html_excerpt = r.text if len(r.text) <= 12000 else r.text[:12000] + "… [truncated]"
+            content_text = soup.get_text(" ", strip=True)
             results.append({
                 "URL": url, "Status": status_code, "Crawl Status": "Success",
                 "Title": title, "Title Length": len(title),
@@ -218,7 +221,7 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
                 "External Links": len(set(external_links)), "Link-to-Word Ratio": link_to_word,
                 "Schema": schema, "Content Type": content_type, "MIME Type": mime_type,
                 "Canonical URL": canonical_url, "OG Title": og_title, "OG Description": og_description,
-                "Crawl Time (s)": crawl_time, "HTML": html_excerpt
+                "Crawl Time (s)": crawl_time, "HTML": html_excerpt, "Content Text": content_text
             })
 
             for link in internal_links:
