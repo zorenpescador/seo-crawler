@@ -11,6 +11,7 @@ import time
 import io
 import organic_research as org
 import keyword_research as kr
+from utils import sanitize_for_display
 
 # ---------------------------
 # Helper utilities
@@ -402,7 +403,11 @@ if st.session_state.crawl_results is not None:
         
         st.markdown("---")
 
-        df_display = df.copy()
+        df_display = sanitize_for_display(
+            df.copy(),
+            drop_columns=["HTML"],
+            max_text_chars=12000,
+        )
         cols_order = ["URL", "Status", "Crawl Status", "Title", "Title Length",
                       "Description", "Description Length", "H1", "Word Count",
                       "Internal Links", "External Links", "Link-to-Word Ratio",
@@ -556,7 +561,8 @@ if st.session_state.crawl_results is not None:
         st.subheader("📥 Export Reports")
         towrite = io.BytesIO()
         with pd.ExcelWriter(towrite, engine="xlsxwriter") as writer:
-            df_filtered.to_excel(writer, sheet_name="Crawl Results", index=False)
+            export_df = sanitize_for_display(df_filtered, drop_columns=["HTML"], max_text_chars=12000)
+            export_df.to_excel(writer, sheet_name="Crawl Results", index=False)
             if not dup_titles.empty:
                 dup_titles.to_excel(writer, sheet_name="Duplicate Titles", index=False)
             if not dup_desc.empty:
