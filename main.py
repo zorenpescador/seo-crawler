@@ -104,6 +104,25 @@ def normalize_url(u):
     u = u.split('#')[0].strip()
     return u
 
+
+def ensure_result_columns(df):
+    if df is None:
+        return df
+
+    required_columns = {
+        "Heading Count": 0,
+        "Image Count": 0,
+        "Canonical URL": "",
+        "OG Title": "",
+        "OG Description": "",
+    }
+
+    for column, default in required_columns.items():
+        if column not in df.columns:
+            df[column] = default
+
+    return df
+
 # ---------------------------
 # Core crawler
 # ---------------------------
@@ -440,7 +459,7 @@ if run_button:
 
 # Display results from session state if available
 if st.session_state.crawl_results is not None:
-    df = st.session_state.crawl_results
+    df = ensure_result_columns(st.session_state.crawl_results)
     meta = st.session_state.crawl_metadata
 
     if meta.get("blocked"):
@@ -611,14 +630,15 @@ if st.session_state.crawl_results is not None:
         st.subheader("📈 Site Summary & Metrics")
         summary_col1, summary_col2, summary_col3, summary_col4 = st.columns(4)
         
+        summary_df = ensure_result_columns(df_filtered.copy())
         with summary_col1:
-            st.metric("Avg Title Length", f"{int(df_filtered['Title Length'].mean())} chars")
+            st.metric("Avg Title Length", f"{int(summary_df['Title Length'].mean())} chars")
         with summary_col2:
-            st.metric("Avg Meta Length", f"{int(df_filtered['Description Length'].mean())} chars")
+            st.metric("Avg Meta Length", f"{int(summary_df['Description Length'].mean())} chars")
         with summary_col3:
-            st.metric("Avg Word Count", f"{int(df_filtered['Word Count'].mean())} words")
+            st.metric("Avg Word Count", f"{int(summary_df['Word Count'].mean())} words")
         with summary_col4:
-            st.metric("Avg Crawl Time", f"{round(df_filtered['Crawl Time (s)'].mean(), 2)}s")
+            st.metric("Avg Crawl Time", f"{round(summary_df['Crawl Time (s)'].mean(), 2)}s")
 
         st.caption("Additional metrics captured: heading count, image count, canonical URL, OG title, and OG description.")
 
@@ -637,13 +657,13 @@ if st.session_state.crawl_results is not None:
             if not dup_h1.empty:
                 dup_h1.to_excel(writer, sheet_name="Duplicate H1s", index=False)
             summary = {
-                "Pages Crawled": [len(df_filtered)],
-                "Avg Title Length": [int(df_filtered['Title Length'].mean())],
-                "Avg Description Length": [int(df_filtered['Description Length'].mean())],
-                "Avg Word Count": [int(df_filtered['Word Count'].mean())],
-                "Avg Heading Count": [round(df_filtered['Heading Count'].mean(), 1)],
-                "Avg Image Count": [round(df_filtered['Image Count'].mean(), 1)],
-                "Avg Crawl Time (s)": [round(df_filtered['Crawl Time (s)'].mean(), 2)]
+                "Pages Crawled": [len(summary_df)],
+                "Avg Title Length": [int(summary_df['Title Length'].mean())],
+                "Avg Description Length": [int(summary_df['Description Length'].mean())],
+                "Avg Word Count": [int(summary_df['Word Count'].mean())],
+                "Avg Heading Count": [round(summary_df['Heading Count'].mean(), 1)],
+                "Avg Image Count": [round(summary_df['Image Count'].mean(), 1)],
+                "Avg Crawl Time (s)": [round(summary_df['Crawl Time (s)'].mean(), 2)]
             }
             pd.DataFrame(summary).to_excel(writer, sheet_name="Summary", index=False)
             writer.close()
