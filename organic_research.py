@@ -199,8 +199,12 @@ def render_streamlit_organic_ui(st, df: pd.DataFrame, html_col: str = "HTML"):
     st.markdown("Discover keyword opportunities using TF-IDF analysis to identify high-potential terms for each page.")
     
     if html_col not in df.columns:
-        st.error(f"❌ Column '{html_col}' not found in dataframe. Please set html_col to the correct column name.")
-        return
+        fallback_cols = [c for c in ["content", "text", "body", "HTML", "html"] if c in df.columns]
+        if fallback_cols:
+            html_col = fallback_cols[0]
+        else:
+            st.info("ℹ️ No HTML/text content column is available for organic analysis in this dataset.")
+            return
 
     # cache the heavy compute
     @st.cache_data
