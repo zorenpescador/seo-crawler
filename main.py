@@ -10,7 +10,6 @@ import re
 import time
 import io
 import organic_research as org
-import keyword_research as kr
 from utils import sanitize_for_display
 
 # ---------------------------
@@ -601,26 +600,3 @@ if st.session_state.crawl_results is not None:
             )
 
         st.markdown("---")
-
-        # Promote Keyword Research Tool
-        st.subheader("🔍 Next Steps: Keyword Research")
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            st.markdown("""
-            Ready to dive deeper into keyword analysis? Use the **Keyword Research Tool** to:
-            - 📊 Analyze keyword frequency across your site
-            - 🎯 Identify high-value optimization opportunities
-            - 📈 Discover search intent patterns
-            - 🔗 Find related keyword clusters
-            - 📄 Generate keyword variations
-            
-            The tool is **independent** and can also analyze competitor content or custom text!
-            """)
-        with col2:
-            st.markdown("")
-            st.markdown("")
-            st.link_button(
-                "🔍 Go to Keyword Research →",
-                url="/?page=keyword-research",
-                use_container_width=True
-            )
