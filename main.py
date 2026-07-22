@@ -11,6 +11,7 @@ import time
 import io
 import organic_research as org
 from utils import sanitize_for_display
+from content_analyzer import render_streamlit_content_analyzer_ui
 
 # ---------------------------
 # Helper utilities
@@ -202,6 +203,22 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
 # ---------------------------
 st.set_page_config(page_title="Advanced SEO Site Crawler", layout="wide", initial_sidebar_state="expanded")
 
+# Register a dedicated content analyzer entry in the sidebar navigation
+if "page" not in st.query_params:
+    st.query_params["page"] = "home"
+
+page = st.sidebar.radio(
+    "Navigation",
+    ["Home", "Content Analyzer"],
+    index=0,
+    key="main_nav",
+)
+
+if page == "Content Analyzer":
+    st.session_state["active_page"] = "content_analyzer"
+else:
+    st.session_state["active_page"] = "home"
+
 # Custom CSS for better styling
 st.markdown("""
 <style>
@@ -354,6 +371,24 @@ if "crawl_results" not in st.session_state:
     st.session_state.crawl_results = None
 if "crawl_metadata" not in st.session_state:
     st.session_state.crawl_metadata = None
+if "active_page" not in st.session_state:
+    st.session_state.active_page = "home"
+
+if st.session_state.active_page == "content_analyzer":
+    st.title("🧠 Content Analyzer")
+    st.markdown("Use this page to analyze text quality, readability, and keyword density.")
+
+    content_input = st.text_area(
+        "Paste content to analyze",
+        height=220,
+        placeholder="Paste article text, landing page copy, or any content here...",
+    )
+    source_name = st.text_input("Source label", value="Content")
+    if st.button("Analyze content", use_container_width=True):
+        render_streamlit_content_analyzer_ui(st, content_input, source_name=source_name)
+    else:
+        render_streamlit_content_analyzer_ui(st, content_input, source_name=source_name)
+    st.stop()
 
 if run_button:
     if not seed_url.startswith("http"):
