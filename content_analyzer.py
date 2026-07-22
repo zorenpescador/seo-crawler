@@ -48,7 +48,7 @@ def _count_syllables(word: str) -> int:
     return max(1, count)
 
 
-def analyze_content(text: str) -> Dict[str, object]:
+def analyze_content(text: str, target_keyword: str = "") -> Dict[str, object]:
     cleaned = normalize_text(text)
     words = re.findall(r"[A-Za-z][A-Za-z'\-]+", cleaned)
     words_lower = [w.lower() for w in words]
@@ -73,6 +73,11 @@ def analyze_content(text: str) -> Dict[str, object]:
         for term, count in keyword_counter.most_common(10)
     ]
 
+    target_keyword_normalized = target_keyword.strip().lower() if target_keyword else ""
+    target_keyword_count = 0
+    if target_keyword_normalized:
+        target_keyword_count = sum(1 for word in words_lower if word == target_keyword_normalized)
+
     return {
         "cleaned_text": cleaned,
         "word_count": word_count,
@@ -83,10 +88,12 @@ def analyze_content(text: str) -> Dict[str, object]:
         "reading_time_minutes": reading_time,
         "flesch_reading_ease": flesch_score,
         "top_keywords": top_keywords,
+        "target_keyword": target_keyword_normalized,
+        "target_keyword_count": target_keyword_count,
     }
 
 
-def render_streamlit_content_analyzer_ui(st, content: str, source_name: str = "Content"):
+def render_streamlit_content_analyzer_ui(st, content: str, source_name: str = "Content", target_keyword: str = ""):
     st.subheader("🧠 Content Analyzer")
     st.markdown("Analyze readability, keyword density, and structure from pasted text or crawl content.")
 
@@ -94,7 +101,7 @@ def render_streamlit_content_analyzer_ui(st, content: str, source_name: str = "C
         st.info("Paste or select content to begin analysis.")
         return
 
-    analysis = analyze_content(content)
+    analysis = analyze_content(content, target_keyword=target_keyword)
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -117,6 +124,15 @@ def render_streamlit_content_analyzer_ui(st, content: str, source_name: str = "C
             "Source": source_name,
         })
     with col_b:
+        st.markdown("**Target Keyword**")
+        if analysis["target_keyword"]:
+            st.write({
+                "Keyword": analysis["target_keyword"],
+                "Occurrences": analysis["target_keyword_count"],
+            })
+        else:
+            st.info("Enter a target keyword to see its frequency.")
+
         st.markdown("**Top Keywords**")
         if analysis["top_keywords"]:
             st.dataframe(

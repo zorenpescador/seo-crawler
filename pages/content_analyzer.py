@@ -10,8 +10,9 @@ content_input = st.text_area(
     placeholder="Paste article text, landing page copy, or any content here...",
 )
 source_name = st.text_input("Source label", value="Content")
+target_keyword = st.text_input("Target keyword", value="")
 
 if st.button("Analyze content", use_container_width=True):
-    render_streamlit_content_analyzer_ui(st, content_input, source_name=source_name)
+    render_streamlit_content_analyzer_ui(st, content_input, source_name=source_name, target_keyword=target_keyword)
 else:
-    render_streamlit_content_analyzer_ui(st, content_input, source_name=source_name)
+    render_streamlit_content_analyzer_ui(st, content_input, source_name=source_name, target_keyword=target_keyword)
