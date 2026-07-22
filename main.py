@@ -127,7 +127,7 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
                     "H1": "", "H Tags": "", "Word Count": 0,
                     "Internal Links": 0, "External Links": 0, "Link-to-Word Ratio": 0,
                     "Schema": "", "Content Type": "", "MIME Type": r.headers.get("Content-Type", ""),
-                    "Crawl Time (s)": crawl_time
+                    "Crawl Time (s)": crawl_time, "HTML": ""
                 })
                 visited.add(url)
                 time.sleep(delay)
@@ -163,6 +163,7 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
             content_type = detect_content_type(url, soup)
             mime_type = r.headers.get("Content-Type", "")
 
+            html_excerpt = r.text if len(r.text) <= 12000 else r.text[:12000] + "… [truncated]"
             results.append({
                 "URL": url, "Status": status_code, "Crawl Status": "Success",
                 "Title": title, "Title Length": len(title),
@@ -171,7 +172,7 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
                 "Word Count": word_count, "Internal Links": len(set(internal_links)),
                 "External Links": len(set(external_links)), "Link-to-Word Ratio": link_to_word,
                 "Schema": schema, "Content Type": content_type, "MIME Type": mime_type,
-                "Crawl Time (s)": crawl_time, "HTML": r.text
+                "Crawl Time (s)": crawl_time, "HTML": html_excerpt
             })
 
             for link in internal_links:
@@ -189,7 +190,7 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
                 "Title": "", "Title Length": 0, "Description": "", "Description Length": 0,
                 "H1": "", "H Tags": "", "Word Count": 0, "Internal Links": 0, "External Links": 0,
                 "Link-to-Word Ratio": 0, "Schema": "", "Content Type": "", "MIME Type": "",
-                "Crawl Time (s)": 0
+                "Crawl Time (s)": 0, "HTML": ""
             })
             visited.add(url)
             time.sleep(delay)
@@ -406,7 +407,7 @@ if st.session_state.crawl_results is not None:
         df_display = sanitize_for_display(
             df.copy(),
             drop_columns=["HTML"],
-            max_text_chars=12000,
+            max_text_chars=4000,
         )
         cols_order = ["URL", "Status", "Crawl Status", "Title", "Title Length",
                       "Description", "Description Length", "H1", "Word Count",
@@ -561,7 +562,7 @@ if st.session_state.crawl_results is not None:
         st.subheader("📥 Export Reports")
         towrite = io.BytesIO()
         with pd.ExcelWriter(towrite, engine="xlsxwriter") as writer:
-            export_df = sanitize_for_display(df_filtered, drop_columns=["HTML"], max_text_chars=12000)
+            export_df = sanitize_for_display(df_filtered, drop_columns=["HTML"], max_text_chars=4000)
             export_df.to_excel(writer, sheet_name="Crawl Results", index=False)
             if not dup_titles.empty:
                 dup_titles.to_excel(writer, sheet_name="Duplicate Titles", index=False)
