@@ -133,31 +133,55 @@ FALLBACK_CHECK_CATALOG = {
     },
 }
 
+# checks_catalog.csv describes each check in prose (e.g. "missing <title>") that
+# doesn't match the short display names used below (e.g. "Missing Title"), so we
+# join on the stable check_id instead of the free-text check_name.
+CHECK_NAME_TO_CATALOG_ID = {
+    "Orphan Pages": "C066",
+    "Non-HTTPS Pages": "C021",
+    "Redirecting Pages": "C031",
+    "Duplicate Titles": "C044",
+    "Duplicate Meta Descriptions": "C048",
+    "Duplicate H1 Tags": "C051",
+    "Duplicate Body Content": "C054",
+    "Missing Title": "C041",
+    "Missing Description": "C045",
+    "Missing H1": "C049",
+    "Missing Canonical": "C056",
+    "Thin Content": "C053",
+    "Low Internal Link Support": "C076",
+    "Missing Schema": "C108",
+    "Missing Open Graph Tags": "C112",
+    "Slow Response Time": "C118",
+    "Missing Viewport Meta": "C117",
+    "Images Missing Alt Text": "C130",
+}
+
 
 def _load_check_catalog() -> Dict[str, Dict[str, str]]:
     catalog_path = os.path.join(os.path.dirname(__file__), "checks_catalog.csv")
     if not os.path.exists(catalog_path):
-        return FALLBACK_CHECK_CATALOG
+        return {}
 
     try:
         catalog_df = pd.read_csv(catalog_path)
     except Exception:
-        return FALLBACK_CHECK_CATALOG
+        return {}
 
     catalog: Dict[str, Dict[str, str]] = {}
     for _, row in catalog_df.iterrows():
-        check_name = str(row.get("check_name", "")).strip()
-        if not check_name:
+        check_id = str(row.get("check_id", "")).strip()
+        if not check_id:
             continue
-        catalog[check_name] = {
+        catalog[check_id] = {
             "category": str(row.get("category", "On-Page & Duplicates")).strip(),
             "severity": str(row.get("severity", "Notice")).strip(),
             "notes": str(row.get("notes", "")).strip(),
         }
-    return catalog or FALLBACK_CHECK_CATALOG
+    return catalog
 
 
-CHECK_CATALOG = _load_check_catalog()
+CHECK_CATALOG_BY_ID = _load_check_catalog()
 
 
 def _normalize_text(value: Any) -> str:
@@ -227,7 +251,10 @@ def _grade_for_score(score: int) -> str:
 
 
 def _catalog_reference(check_name: str) -> Dict[str, Any]:
-    templated = CHECK_CATALOG.get(check_name, {})
+    catalog_id = CHECK_NAME_TO_CATALOG_ID.get(check_name)
+    templated = CHECK_CATALOG_BY_ID.get(catalog_id, {}) if catalog_id else {}
+    if not templated:
+        templated = FALLBACK_CHECK_CATALOG.get(check_name, {})
     return {
         "category": templated.get("category", "On-Page & Duplicates"),
         "severity": templated.get("severity", "Notice"),
