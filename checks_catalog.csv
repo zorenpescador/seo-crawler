@@ -1,0 +1,140 @@
+check_id,category,check_name,severity,level,status,notes
+C001,Crawlability & Indexability,robots.txt missing,Warning,Site,New,No robots.txt found at domain root
+C002,Crawlability & Indexability,robots.txt not valid (syntax errors),Warning,Site,New,robots.txt contains malformed directives
+C003,Crawlability & Indexability,robots.txt blocks entire site,Error,Site,New,Disallow: / found for relevant user-agents
+C004,Crawlability & Indexability,robots.txt blocks CSS/JS resources,Warning,Site,New,Rendering-critical assets disallowed
+C005,Crawlability & Indexability,sitemap.xml missing,Warning,Site,New,No sitemap referenced in robots.txt or at /sitemap.xml
+C006,Crawlability & Indexability,sitemap.xml not valid XML,Error,Site,New,Sitemap fails to parse
+C007,Crawlability & Indexability,sitemap contains 4XX/5XX URLs,Error,Site,New,URLs listed in sitemap return client/server errors
+C008,Crawlability & Indexability,sitemap contains redirected URLs,Warning,Site,New,URLs listed in sitemap 3XX-redirect elsewhere
+C009,Crawlability & Indexability,sitemap contains noindex URLs,Warning,Site,New,URLs in sitemap carry a noindex directive
+C010,Crawlability & Indexability,sitemap not referenced in robots.txt,Notice,Site,New,Sitemap exists but isn't declared
+C011,Crawlability & Indexability,page blocked by robots.txt,Error,Page,Existing,Crawler already checks this via robotparser
+C012,Crawlability & Indexability,page has noindex directive,Warning,Page,Existing,meta robots or X-Robots-Tag contains noindex
+C013,Crawlability & Indexability,page has nofollow on all outlinks,Warning,Page,New,meta robots nofollow prevents link equity flow
+C014,Crawlability & Indexability,page not crawlable (timeout/DNS/conn error),Error,Page,Existing,Request failed outright
+C015,Crawlability & Indexability,"page returns soft 404 (200 status, error-like content)",Warning,Page,New,Heuristic: thin/empty body with 'not found' language but HTTP 200
+C016,Crawlability & Indexability,conflicting robots signals (meta vs X-Robots-Tag),Warning,Page,New,HTTP header and HTML meta robots disagree
+C017,Crawlability & Indexability,canonical points to a blocked/noindex page,Error,Page,New,Canonical target is itself non-indexable
+C018,Crawlability & Indexability,canonical points to a different domain,Warning,Page,New,"Cross-domain canonical, verify intent"
+C019,Crawlability & Indexability,canonical chain (canonical points to a page with its own different canonical),Warning,Page,New,Canonical does not resolve to a stable target
+C020,Crawlability & Indexability,paginated page missing rel=next/prev or self-canonical,Notice,Page,New,Pagination signals absent
+C021,HTTPS & Security,site not served over HTTPS,Error,Site,New,Homepage/any page loads over plain HTTP
+C022,HTTPS & Security,HTTP URLs present in sitemap,Error,Site,New,Sitemap lists http:// instead of https://
+C023,HTTPS & Security,mixed content on page,Error,Page,New,HTTPS page loads http:// sub-resources (img/script/css)
+C024,HTTPS & Security,no automatic HTTP->HTTPS redirect,Error,Site,New,http:// version does not redirect to https://
+C025,HTTPS & Security,missing HSTS header,Warning,Site,New,Strict-Transport-Security header absent
+C026,HTTPS & Security,SSL certificate expired,Error,Site,New,Certificate validity end date has passed
+C027,HTTPS & Security,SSL certificate expiring soon (<30 days),Warning,Site,New,Certificate nearing expiry
+C028,HTTPS & Security,SSL certificate hostname mismatch,Error,Site,New,Cert CN/SAN doesn't match requested host
+C029,HTTPS & Security,outdated TLS protocol supported (TLS 1.0/1.1),Warning,Site,New,Legacy insecure protocol still negotiable
+C030,HTTPS & Security,"missing security headers (X-Content-Type-Options, X-Frame-Options, CSP)",Notice,Page,New,Common hardening headers absent
+C031,Redirects,redirect chain (2+ hops),Warning,Page,New,URL passes through multiple redirects before resolving
+C032,Redirects,redirect loop,Error,Page,New,Redirect chain returns to a previously visited URL
+C033,Redirects,temporary redirect (302/307) used where permanent intended,Warning,Page,New,3XX semantics likely mismatched with intent
+C034,Redirects,internal links pointing to a redirecting URL instead of final target,Warning,Page,New,Wastes crawl budget / link equity
+C035,Redirects,redirect to a 4XX/5XX destination,Error,Page,New,Redirect resolves to a broken page
+C036,Redirects,meta-refresh redirect used instead of HTTP redirect,Notice,Page,New,Non-standard client-side redirect pattern
+C037,Redirects,trailing-slash and non-trailing-slash both resolve without redirect (duplicate URLs),Warning,Site,New,Both variants return 200 instead of canonicalizing
+C038,Redirects,www / non-www both resolve without redirect,Warning,Site,New,Host variants not canonicalized
+C039,Redirects,HTTP->HTTPS redirect chain longer than 1 hop,Warning,Page,New,Protocol upgrade adds unnecessary hops
+C040,Redirects,excessive redirects site-wide (>5% of crawled URLs),Warning,Site,New,Aggregate signal of unmanaged redirect debt
+C041,On-Page & Duplicates,missing <title>,Error,Page,Existing,
+C042,On-Page & Duplicates,title too short,Warning,Page,Existing,<30 chars
+C043,On-Page & Duplicates,title too long,Warning,Page,Existing,>60 chars
+C044,On-Page & Duplicates,duplicate titles across pages,Error,Site,New,"Site-wide comparison required, not single-page"
+C045,On-Page & Duplicates,missing meta description,Warning,Page,Existing,
+C046,On-Page & Duplicates,meta description too short,Notice,Page,Existing,<70 chars
+C047,On-Page & Duplicates,meta description too long,Notice,Page,Existing,>160 chars
+C048,On-Page & Duplicates,duplicate meta descriptions across pages,Warning,Site,New,Site-wide comparison required
+C049,On-Page & Duplicates,missing H1,Error,Page,Existing,
+C050,On-Page & Duplicates,multiple H1s,Warning,Page,Existing,
+C051,On-Page & Duplicates,duplicate H1 across pages,Warning,Site,New,Site-wide comparison required
+C052,On-Page & Duplicates,H1 duplicates the title exactly,Notice,Page,New,Missed opportunity for complementary signal
+C053,On-Page & Duplicates,thin content,Warning,Page,Existing,<300 words
+C054,On-Page & Duplicates,duplicate/near-duplicate body content across pages,Error,Site,New,Content similarity hashing across crawled set
+C055,On-Page & Duplicates,"exact-duplicate page (same content hash, different URL)",Error,Site,New,Byte-identical or near-identical body
+C056,On-Page & Duplicates,missing canonical tag,Warning,Page,Existing,
+C057,On-Page & Duplicates,keyword cannibalization (2+ pages targeting same priority keyword),Warning,Site,New,Cross-reference priority_keywords.csv target mapping
+C058,On-Page & Duplicates,low text-to-HTML ratio,Notice,Page,New,Page is markup-heavy relative to visible text
+C059,On-Page & Duplicates,missing language declaration (html lang attribute),Notice,Page,New,
+C060,On-Page & Duplicates,"broken heading hierarchy (e.g. H1 -> H3, skipping H2)",Notice,Page,New,
+C061,On-Page & Duplicates,URL contains excessive parameters,Notice,Page,New,">3 query parameters, duplicate-content risk"
+C062,On-Page & Duplicates,URL is excessively long,Notice,Page,New,>115 characters
+C063,On-Page & Duplicates,non-descriptive URL (auto-generated IDs/slugs),Notice,Page,New,
+C064,On-Page & Duplicates,underscores used in URL instead of hyphens,Notice,Page,New,
+C065,On-Page & Duplicates,uppercase characters in URL,Notice,Page,New,Case-variant duplicate risk
+C066,Site Architecture & Internal Linking,"orphan page (in sitemap, not linked internally)",Error,Site,New,Requires cross-referencing crawl graph vs sitemap
+C067,Site Architecture & Internal Linking,page more than 3 clicks from homepage,Warning,Site,New,Crawl-depth graph analysis
+C068,Site Architecture & Internal Linking,page more than 5 clicks from homepage,Error,Site,New,Severe depth
+C069,Site Architecture & Internal Linking,too few internal links to an important page,Warning,Site,New,Priority page (per target-keyword map) under-linked
+C070,Site Architecture & Internal Linking,too many internal links on a single page,Notice,Page,New,>100 internal links dilutes equity
+C071,Site Architecture & Internal Linking,broken internal link,Error,Page,New,<a href> internal target returns 4XX/5XX
+C072,Site Architecture & Internal Linking,internal link to a redirected URL,Warning,Page,New,
+C073,Site Architecture & Internal Linking,internal link uses nofollow,Notice,Page,New,"Unusual for internal navigation, verify intent"
+C074,Site Architecture & Internal Linking,"internal link with empty or generic anchor text ('click here', 'read more')",Notice,Page,New,
+C075,Site Architecture & Internal Linking,internal link anchor text mismatch vs destination topic,Notice,Page,New,Heuristic keyword overlap check
+C076,Site Architecture & Internal Linking,page with only 1 incoming internal link,Warning,Site,New,Weak internal support
+C077,Site Architecture & Internal Linking,navigation/footer link count anomaly vs sitewide pattern,Notice,Site,New,Outlier page missing standard nav
+C078,Site Architecture & Internal Linking,breadcrumb missing on deep page,Notice,Page,New,
+C079,Site Architecture & Internal Linking,pagination series missing links to first/last page,Notice,Page,New,
+C080,Site Architecture & Internal Linking,subdomain treated as separate crawl root without cross-linking,Notice,Site,New,
+C081,Links,broken external link (4XX/5XX),Warning,Page,New,Optional: requires --check-external-links flag (slower)
+C082,Links,external link to a domain with no HTTPS,Notice,Page,New,
+C083,Links,external link redirect chain,Notice,Page,New,
+C084,Links,link to a disallowed/blocked-by-robots external resource,Notice,Page,New,
+C085,Links,broken image source (4XX/5XX),Error,Page,New,<img src> fails to load
+C086,Links,image hosted on a different (uncontrolled) domain,Notice,Page,New,Hotlinking risk / dependency risk
+C087,Links,broken favicon,Notice,Site,New,
+C088,Links,broken canonical target (canonical URL 4XX/5XX),Error,Page,New,
+C089,Links,broken hreflang target,Error,Page,New,See International SEO category for full hreflang set
+C090,Links,link to a URL with tracking parameters not canonicalized,Notice,Page,New,
+C091,Links,dead outbound link in footer/nav (site-wide template),Warning,Site,New,Same broken link repeated across many pages
+C092,Links,excessive outbound links relative to word count,Notice,Page,New,
+C093,Links,affiliate/sponsored links missing rel=sponsored or nofollow,Notice,Page,New,
+C094,Links,link with no href fallback (javascript:void),Notice,Page,New,
+C095,Links,form action pointing to broken/insecure endpoint,Warning,Page,New,
+C096,International SEO,hreflang attribute present but invalid language/region code,Error,Page,New,
+C097,International SEO,hreflang missing return link (no reciprocal confirmation),Error,Page,New,"Page A links to B, B doesn't link back to A"
+C098,International SEO,hreflang points to a non-canonical URL,Warning,Page,New,
+C099,International SEO,hreflang points to a redirected URL,Warning,Page,New,
+C100,International SEO,hreflang points to a 4XX/5XX URL,Error,Page,New,
+C101,International SEO,multiple x-default hreflang entries,Warning,Page,New,Should be exactly one
+C102,International SEO,missing x-default for a multi-region set,Notice,Page,New,
+C103,International SEO,hreflang set is not confirmed on all pages in the cluster,Warning,Site,New,Inconsistent cluster membership
+C104,International SEO,conflicting language declared in html lang vs hreflang self-reference,Notice,Page,New,
+C105,International SEO,hreflang declared in HTML and sitemap disagree,Warning,Site,New,
+C106,International SEO,duplicate hreflang for same language/region on one page,Warning,Page,New,
+C107,International SEO,content language auto-detection mismatch (declared vs detected),Notice,Page,New,Basic language-detection heuristic
+C108,Markup & Structured Data,no schema.org structured data present,Notice,Page,Existing,
+C109,Markup & Structured Data,structured data has invalid/malformed JSON-LD,Error,Page,New,JSON parse failure
+C110,Markup & Structured Data,structured data missing required fields for declared @type,Warning,Page,New,e.g. Organization missing 'name'
+C111,Markup & Structured Data,structured data type mismatch vs visible page content,Notice,Page,New,e.g. Product schema on a blog post
+C112,Markup & Structured Data,Open Graph tags missing (og:title/og:description/og:image),Notice,Page,Existing (og_title partially captured),
+C113,Markup & Structured Data,Twitter Card tags missing,Notice,Page,New,
+C114,Markup & Structured Data,AMP page missing amphtml link on canonical,Notice,Page,New,Only relevant if AMP is in use
+C115,Markup & Structured Data,AMP page has validation errors,Warning,Page,New,Requires AMP validator dependency
+C116,Markup & Structured Data,favicon not declared via link tag,Notice,Page,New,
+C117,Markup & Structured Data,viewport meta tag missing,Warning,Page,New,Mobile-rendering signal
+C118,Site Performance,slow server response time,Warning,Page,Existing,>2500ms in current crawler; refine thresholds per CWV bands
+C119,Site Performance,uncompressed HTML response (no gzip/br Content-Encoding),Warning,Page,New,
+C120,Site Performance,large HTML document size,Notice,Page,New,>2MB
+C121,Site Performance,excessive number of on-page requests inferred (script/link/img tag count),Notice,Page,New,"Proxy metric, not real waterfall"
+C122,Site Performance,render-blocking CSS/JS in <head>,Notice,Page,New,Heuristic: <script> without async/defer before body content
+C123,Site Performance,images without explicit width/height (layout shift risk),Warning,Page,New,
+C124,Site Performance,images not using modern formats (webp/avif) where alternatives exist,Notice,Page,New,
+C125,Site Performance,no lazy-loading attribute on below-fold images,Notice,Page,New,
+C126,Site Performance,Core Web Vitals (LCP/INP/CLS) not measured — lab data only,Notice,Site,New (dependency),"Requires PageSpeed Insights / CrUX API integration, see Open Questions"
+C127,Site Performance,excessive DOM size,Notice,Page,New,">1500 nodes, approximated via tag count"
+C128,Site Performance,favicon/static asset caching headers missing,Notice,Page,New,Cache-Control absent on static resources
+C129,Mobile & Accessibility,"no viewport meta tag (duplicate of Markup check, surfaced here for mobile UX lens)",Warning,Page,New,
+C130,Mobile & Accessibility,image missing alt text,Warning,Page,Existing,
+C131,Mobile & Accessibility,empty alt attribute on a non-decorative image (heuristic),Notice,Page,New,
+C132,Mobile & Accessibility,tap targets likely too small/close (heuristic: many inline <a> in dense text),Notice,Page,New,"Best-effort heuristic, not a full a11y audit"
+C133,Mobile & Accessibility,text likely too small (heuristic: no explicit font-size and small viewport),Notice,Page,New,
+C134,Mobile & Accessibility,form fields missing associated <label>,Warning,Page,New,
+C135,Mobile & Accessibility,color contrast cannot be assessed without rendering (flagged as unverified),Notice,Page,New,"Static HTML parse only — no rendering, see Non-Goals"
+C136,Site Health (Aggregate),overall Site Health Score,N/A,Site,New,"Computed 0-100 index, see Health Score Methodology"
+C137,Site Health (Aggregate),category-level sub-scores (10 categories),N/A,Site,New,
+C138,Site Health (Aggregate),health score trend vs previous audit,N/A,Site,New (Phase 3),Requires persisted audit history
+C139,Site Health (Aggregate),"top N 'quick win' issues (high impact, low effort to fix)",N/A,Site,New,Ranked by pages-affected x severity weight
