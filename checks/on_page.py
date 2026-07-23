@@ -137,9 +137,10 @@ def check_C063(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C063 not yet implemented")
 
 
-def check_C064(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C064(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """underscores used in URL instead of hyphens (Notice · Page)"""
-    raise NotImplementedError("C064 not yet implemented")
+    mask = pages_df["URL"].astype(str).str.contains("_", regex=False)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C065(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
@@ -157,5 +158,4 @@ CHECKS = {
     "C060": check_C060,
     "C061": check_C061,
     "C063": check_C063,
-    "C064": check_C064,
 }
