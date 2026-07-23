@@ -1,11 +1,11 @@
 """Registry of stubbed checks_catalog.csv checks awaiting implementation.
 
-health_score.py implements 23 checks directly (see CHECK_NAME_TO_CATALOG_ID
-there, including the title/description length and multiple-H1 checks
-implemented in checks/on_page.py) plus the aggregate score/category-scores/
-quick-wins rows (C136, C137, C139). The remaining 112 checks in
-checks_catalog.csv have a placeholder function here, grouped by category
-into one module per file.
+health_score.py implements 24 checks directly (see CHECK_NAME_TO_CATALOG_ID
+there, including the title/description length, multiple-H1, and missing
+html-lang checks implemented in checks/on_page.py) plus the aggregate
+score/category-scores/quick-wins rows (C136, C137, C139). The remaining
+111 checks in checks_catalog.csv have a placeholder function here, grouped
+by category into one module per file.
 
 Each stub has the signature (pages_df, site_ctx) -> None and raises
 NotImplementedError. site_ctx is a placeholder for site-level data the

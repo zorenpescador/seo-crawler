@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 import pandas as pd
 from bs4 import BeautifulSoup
 
-from checks.on_page import check_C042, check_C043, check_C046, check_C047, check_C050
+from checks.on_page import check_C042, check_C043, check_C046, check_C047, check_C050, check_C059
 
 
 SEVERITY_WEIGHTS = {
@@ -123,6 +123,11 @@ FALLBACK_CHECK_CATALOG = {
         "severity": "Warning",
         "notes": "Pages contain more than one H1 tag.",
     },
+    "Missing Language Declaration": {
+        "category": "On-Page & Duplicates",
+        "severity": "Notice",
+        "notes": "Pages are missing an html lang attribute.",
+    },
     "Thin Content": {
         "category": "On-Page & Duplicates",
         "severity": "Warning",
@@ -180,6 +185,7 @@ CHECK_NAME_TO_CATALOG_ID = {
     "Meta Description Too Short": "C046",
     "Meta Description Too Long": "C047",
     "Multiple H1s": "C050",
+    "Missing Language Declaration": "C059",
     "Thin Content": "C053",
     "Low Internal Link Support": "C076",
     "Missing Schema": "C108",
@@ -358,6 +364,7 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
     desc_too_short = check_C046(work_df)
     desc_too_long = check_C047(work_df)
     multiple_h1 = check_C050(work_df)
+    missing_lang = check_C059(work_df)
     thin_content = work_df[work_df["Word Count"].astype(int) < 300][["URL"]].drop_duplicates().reset_index(drop=True)
     slow_pages = work_df[work_df["Crawl Time (s)"].astype(float) > 2.5][["URL"]].drop_duplicates().reset_index(drop=True)
     non_https_pages = work_df[~work_df["URL"].astype(str).str.startswith("https://")][["URL"]].drop_duplicates().reset_index(drop=True)
@@ -526,6 +533,15 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
         affected_pages=len(multiple_h1),
         total_pages=total_pages,
         notes=_catalog_reference("Multiple H1s")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Missing Language Declaration")["category"],
+        check="Missing Language Declaration",
+        severity=_catalog_reference("Missing Language Declaration")["severity"],
+        affected_pages=len(missing_lang),
+        total_pages=total_pages,
+        notes=_catalog_reference("Missing Language Declaration")["notes"],
     )
     _add_finding(
         findings,

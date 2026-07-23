@@ -90,9 +90,19 @@ def check_C058(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C058 not yet implemented")
 
 
-def check_C059(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def _has_lang_attribute(html: Any) -> bool:
+    if not html:
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    html_tag = soup.find("html")
+    lang = html_tag.get("lang") if html_tag else None
+    return bool(lang and str(lang).strip())
+
+
+def check_C059(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """missing language declaration (html lang attribute) (Notice · Page)"""
-    raise NotImplementedError("C059 not yet implemented")
+    mask = ~pages_df["HTML"].fillna("").apply(_has_lang_attribute)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C060(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -136,7 +146,6 @@ CHECKS = {
     "C055": check_C055,
     "C057": check_C057,
     "C058": check_C058,
-    "C059": check_C059,
     "C060": check_C060,
     "C061": check_C061,
     "C062": check_C062,
