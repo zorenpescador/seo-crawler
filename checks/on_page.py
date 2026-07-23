@@ -5,6 +5,7 @@ thin content, duplicate titles/descriptions/H1/body, and (via this module)
 title/description length. See checks/crawlability.py for the stub pattern.
 """
 from typing import Any, Dict
+from urllib.parse import parse_qs, urlparse
 
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -13,6 +14,7 @@ TITLE_MIN_LENGTH = 30
 TITLE_MAX_LENGTH = 60
 DESCRIPTION_MIN_LENGTH = 70
 DESCRIPTION_MAX_LENGTH = 160
+URL_QUERY_PARAM_MAX = 3
 
 
 def check_C042(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
@@ -114,11 +116,17 @@ def check_C060(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C060 not yet implemented")
 
 
-def check_C061(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def _query_param_count(url: Any) -> int:
+    query = urlparse(str(url)).query
+    return len(parse_qs(query)) if query else 0
+
+
+def check_C061(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """URL contains excessive parameters (Notice · Page)
     >3 query parameters, duplicate-content risk.
     """
-    raise NotImplementedError("C061 not yet implemented")
+    counts = pages_df["URL"].apply(_query_param_count)
+    return pages_df.loc[counts.gt(URL_QUERY_PARAM_MAX), ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 URL_MAX_LENGTH = 115
@@ -156,6 +164,5 @@ CHECKS = {
     "C057": check_C057,
     "C058": check_C058,
     "C060": check_C060,
-    "C061": check_C061,
     "C063": check_C063,
 }
