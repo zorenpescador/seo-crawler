@@ -142,11 +142,12 @@ def check_C064(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C064 not yet implemented")
 
 
-def check_C065(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C065(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """uppercase characters in URL (Notice · Page)
     Case-variant duplicate risk.
     """
-    raise NotImplementedError("C065 not yet implemented")
+    mask = pages_df["URL"].astype(str).apply(lambda url: any(c.isupper() for c in url))
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 CHECKS = {
@@ -157,5 +158,4 @@ CHECKS = {
     "C061": check_C061,
     "C063": check_C063,
     "C064": check_C064,
-    "C065": check_C065,
 }

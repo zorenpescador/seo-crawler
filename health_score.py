@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 import pandas as pd
 from bs4 import BeautifulSoup
 
-from checks.on_page import check_C042, check_C043, check_C046, check_C047, check_C050, check_C052, check_C059, check_C062
+from checks.on_page import check_C042, check_C043, check_C046, check_C047, check_C050, check_C052, check_C059, check_C062, check_C065
 
 
 SEVERITY_WEIGHTS = {
@@ -138,6 +138,11 @@ FALLBACK_CHECK_CATALOG = {
         "severity": "Notice",
         "notes": "URLs are over 115 characters.",
     },
+    "URL Contains Uppercase": {
+        "category": "On-Page & Duplicates",
+        "severity": "Notice",
+        "notes": "URLs contain uppercase characters, a case-variant duplicate risk.",
+    },
     "Thin Content": {
         "category": "On-Page & Duplicates",
         "severity": "Warning",
@@ -198,6 +203,7 @@ CHECK_NAME_TO_CATALOG_ID = {
     "Missing Language Declaration": "C059",
     "H1 Duplicates Title": "C052",
     "URL Too Long": "C062",
+    "URL Contains Uppercase": "C065",
     "Thin Content": "C053",
     "Low Internal Link Support": "C076",
     "Missing Schema": "C108",
@@ -379,6 +385,7 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
     missing_lang = check_C059(work_df)
     h1_dup_title = check_C052(work_df)
     url_too_long = check_C062(work_df)
+    url_uppercase = check_C065(work_df)
     thin_content = work_df[work_df["Word Count"].astype(int) < 300][["URL"]].drop_duplicates().reset_index(drop=True)
     slow_pages = work_df[work_df["Crawl Time (s)"].astype(float) > 2.5][["URL"]].drop_duplicates().reset_index(drop=True)
     non_https_pages = work_df[~work_df["URL"].astype(str).str.startswith("https://")][["URL"]].drop_duplicates().reset_index(drop=True)
@@ -574,6 +581,15 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
         affected_pages=len(url_too_long),
         total_pages=total_pages,
         notes=_catalog_reference("URL Too Long")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("URL Contains Uppercase")["category"],
+        check="URL Contains Uppercase",
+        severity=_catalog_reference("URL Contains Uppercase")["severity"],
+        affected_pages=len(url_uppercase),
+        total_pages=total_pages,
+        notes=_catalog_reference("URL Contains Uppercase")["notes"],
     )
     _add_finding(
         findings,
