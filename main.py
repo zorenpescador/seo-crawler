@@ -10,6 +10,7 @@ import re
 import time
 import io
 import organic_research as org
+import site_audit as sa
 from utils import sanitize_for_display
 from content_analyzer import render_streamlit_content_analyzer_ui
 
@@ -615,8 +616,9 @@ if st.session_state.crawl_results is not None:
         st.markdown("---")
 
         # Main Analysis Tabs
-        analysis_tab1, analysis_tab2 = st.tabs([
+        analysis_tab1, analysis_tab2, analysis_tab3 = st.tabs([
             "📊 Organic Research",
+            "🧭 Site Audit",
             "📈 Advanced Metrics"
         ])
         
@@ -625,6 +627,9 @@ if st.session_state.crawl_results is not None:
             org.render_streamlit_organic_ui(st, df_filtered, html_col="HTML")
         
         with analysis_tab2:
+            sa.render_streamlit_site_audit_ui(st, df_filtered)
+        
+        with analysis_tab3:
             st.markdown("---")
 
         st.markdown("---")
