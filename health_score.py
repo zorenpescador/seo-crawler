@@ -7,6 +7,8 @@ from typing import Any, Dict, List
 import pandas as pd
 from bs4 import BeautifulSoup
 
+from checks.on_page import check_C042, check_C043, check_C046, check_C047
+
 
 SEVERITY_WEIGHTS = {
     "Error": 3,
@@ -96,6 +98,26 @@ FALLBACK_CHECK_CATALOG = {
         "severity": "Warning",
         "notes": "Pages are missing a canonical link.",
     },
+    "Title Too Short": {
+        "category": "On-Page & Duplicates",
+        "severity": "Warning",
+        "notes": "Titles are under 30 characters.",
+    },
+    "Title Too Long": {
+        "category": "On-Page & Duplicates",
+        "severity": "Warning",
+        "notes": "Titles are over 60 characters.",
+    },
+    "Meta Description Too Short": {
+        "category": "On-Page & Duplicates",
+        "severity": "Notice",
+        "notes": "Meta descriptions are under 70 characters.",
+    },
+    "Meta Description Too Long": {
+        "category": "On-Page & Duplicates",
+        "severity": "Notice",
+        "notes": "Meta descriptions are over 160 characters.",
+    },
     "Thin Content": {
         "category": "On-Page & Duplicates",
         "severity": "Warning",
@@ -148,6 +170,10 @@ CHECK_NAME_TO_CATALOG_ID = {
     "Missing Description": "C045",
     "Missing H1": "C049",
     "Missing Canonical": "C056",
+    "Title Too Short": "C042",
+    "Title Too Long": "C043",
+    "Meta Description Too Short": "C046",
+    "Meta Description Too Long": "C047",
     "Thin Content": "C053",
     "Low Internal Link Support": "C076",
     "Missing Schema": "C108",
@@ -321,6 +347,10 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
     missing_desc = work_df[work_df["Description"].astype(str).str.strip().eq("")][["URL"]].drop_duplicates().reset_index(drop=True)
     missing_h1 = work_df[work_df["H1"].astype(str).str.strip().eq("")][["URL"]].drop_duplicates().reset_index(drop=True)
     missing_canonical = work_df[work_df["Canonical URL"].astype(str).str.strip().eq("")][["URL"]].drop_duplicates().reset_index(drop=True)
+    title_too_short = check_C042(work_df)
+    title_too_long = check_C043(work_df)
+    desc_too_short = check_C046(work_df)
+    desc_too_long = check_C047(work_df)
     thin_content = work_df[work_df["Word Count"].astype(int) < 300][["URL"]].drop_duplicates().reset_index(drop=True)
     slow_pages = work_df[work_df["Crawl Time (s)"].astype(float) > 2.5][["URL"]].drop_duplicates().reset_index(drop=True)
     non_https_pages = work_df[~work_df["URL"].astype(str).str.startswith("https://")][["URL"]].drop_duplicates().reset_index(drop=True)
@@ -444,6 +474,42 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
         affected_pages=len(missing_canonical),
         total_pages=total_pages,
         notes=_catalog_reference("Missing Canonical")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Title Too Short")["category"],
+        check="Title Too Short",
+        severity=_catalog_reference("Title Too Short")["severity"],
+        affected_pages=len(title_too_short),
+        total_pages=total_pages,
+        notes=_catalog_reference("Title Too Short")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Title Too Long")["category"],
+        check="Title Too Long",
+        severity=_catalog_reference("Title Too Long")["severity"],
+        affected_pages=len(title_too_long),
+        total_pages=total_pages,
+        notes=_catalog_reference("Title Too Long")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Meta Description Too Short")["category"],
+        check="Meta Description Too Short",
+        severity=_catalog_reference("Meta Description Too Short")["severity"],
+        affected_pages=len(desc_too_short),
+        total_pages=total_pages,
+        notes=_catalog_reference("Meta Description Too Short")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Meta Description Too Long")["category"],
+        check="Meta Description Too Long",
+        severity=_catalog_reference("Meta Description Too Long")["severity"],
+        affected_pages=len(desc_too_long),
+        total_pages=total_pages,
+        notes=_catalog_reference("Meta Description Too Long")["notes"],
     )
     _add_finding(
         findings,

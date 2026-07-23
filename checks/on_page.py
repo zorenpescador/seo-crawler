@@ -1,40 +1,51 @@
 """Stubs for checks_catalog.csv category: On-Page & Duplicates (remaining checks).
 
 health_score.py already implements: missing title/description/H1/canonical,
-thin content, and duplicate titles/descriptions/H1/body. These stubs cover
-the rest of the category. See checks/crawlability.py for the pattern.
+thin content, duplicate titles/descriptions/H1/body, and (via this module)
+title/description length. See checks/crawlability.py for the stub pattern.
 """
 from typing import Any, Dict
 
 import pandas as pd
 
+TITLE_MIN_LENGTH = 30
+TITLE_MAX_LENGTH = 60
+DESCRIPTION_MIN_LENGTH = 70
+DESCRIPTION_MAX_LENGTH = 160
 
-def check_C042(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+
+def check_C042(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """title too short (Warning · Page)
-    <30 chars.
+    <30 chars. Excludes pages with no title (see Missing Title, C041).
     """
-    raise NotImplementedError("C042 not yet implemented")
+    length = pages_df["Title Length"].astype(int)
+    mask = length.gt(0) & length.lt(TITLE_MIN_LENGTH)
+    return pages_df.loc[mask, ["URL", "Title", "Title Length"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C043(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C043(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """title too long (Warning · Page)
     >60 chars.
     """
-    raise NotImplementedError("C043 not yet implemented")
+    mask = pages_df["Title Length"].astype(int).gt(TITLE_MAX_LENGTH)
+    return pages_df.loc[mask, ["URL", "Title", "Title Length"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C046(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C046(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """meta description too short (Notice · Page)
-    <70 chars.
+    <70 chars. Excludes pages with no description (see Missing Description, C045).
     """
-    raise NotImplementedError("C046 not yet implemented")
+    length = pages_df["Description Length"].astype(int)
+    mask = length.gt(0) & length.lt(DESCRIPTION_MIN_LENGTH)
+    return pages_df.loc[mask, ["URL", "Description", "Description Length"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C047(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C047(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """meta description too long (Notice · Page)
     >160 chars.
     """
-    raise NotImplementedError("C047 not yet implemented")
+    mask = pages_df["Description Length"].astype(int).gt(DESCRIPTION_MAX_LENGTH)
+    return pages_df.loc[mask, ["URL", "Description", "Description Length"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C050(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -112,10 +123,6 @@ def check_C065(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
 
 
 CHECKS = {
-    "C042": check_C042,
-    "C043": check_C043,
-    "C046": check_C046,
-    "C047": check_C047,
     "C050": check_C050,
     "C052": check_C052,
     "C055": check_C055,
