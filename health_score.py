@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 import pandas as pd
 from bs4 import BeautifulSoup
 
-from checks.on_page import check_C042, check_C043, check_C046, check_C047, check_C050, check_C052, check_C059
+from checks.on_page import check_C042, check_C043, check_C046, check_C047, check_C050, check_C052, check_C059, check_C062
 
 
 SEVERITY_WEIGHTS = {
@@ -133,6 +133,11 @@ FALLBACK_CHECK_CATALOG = {
         "severity": "Notice",
         "notes": "The H1 text is identical to the title tag.",
     },
+    "URL Too Long": {
+        "category": "On-Page & Duplicates",
+        "severity": "Notice",
+        "notes": "URLs are over 115 characters.",
+    },
     "Thin Content": {
         "category": "On-Page & Duplicates",
         "severity": "Warning",
@@ -192,6 +197,7 @@ CHECK_NAME_TO_CATALOG_ID = {
     "Multiple H1s": "C050",
     "Missing Language Declaration": "C059",
     "H1 Duplicates Title": "C052",
+    "URL Too Long": "C062",
     "Thin Content": "C053",
     "Low Internal Link Support": "C076",
     "Missing Schema": "C108",
@@ -372,6 +378,7 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
     multiple_h1 = check_C050(work_df)
     missing_lang = check_C059(work_df)
     h1_dup_title = check_C052(work_df)
+    url_too_long = check_C062(work_df)
     thin_content = work_df[work_df["Word Count"].astype(int) < 300][["URL"]].drop_duplicates().reset_index(drop=True)
     slow_pages = work_df[work_df["Crawl Time (s)"].astype(float) > 2.5][["URL"]].drop_duplicates().reset_index(drop=True)
     non_https_pages = work_df[~work_df["URL"].astype(str).str.startswith("https://")][["URL"]].drop_duplicates().reset_index(drop=True)
@@ -558,6 +565,15 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
         affected_pages=len(h1_dup_title),
         total_pages=total_pages,
         notes=_catalog_reference("H1 Duplicates Title")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("URL Too Long")["category"],
+        check="URL Too Long",
+        severity=_catalog_reference("URL Too Long")["severity"],
+        affected_pages=len(url_too_long),
+        total_pages=total_pages,
+        notes=_catalog_reference("URL Too Long")["notes"],
     )
     _add_finding(
         findings,

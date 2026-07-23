@@ -121,11 +121,15 @@ def check_C061(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C061 not yet implemented")
 
 
-def check_C062(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+URL_MAX_LENGTH = 115
+
+
+def check_C062(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """URL is excessively long (Notice · Page)
     >115 characters.
     """
-    raise NotImplementedError("C062 not yet implemented")
+    mask = pages_df["URL"].astype(str).str.len().gt(URL_MAX_LENGTH)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C063(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -151,7 +155,6 @@ CHECKS = {
     "C058": check_C058,
     "C060": check_C060,
     "C061": check_C061,
-    "C062": check_C062,
     "C063": check_C063,
     "C064": check_C064,
     "C065": check_C065,
