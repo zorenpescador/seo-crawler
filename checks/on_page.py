@@ -62,11 +62,15 @@ def check_C050(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[counts.gt(1), ["URL", "H1"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C052(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C052(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """H1 duplicates the title exactly (Notice · Page)
-    Missed opportunity for complementary signal.
+    Missed opportunity for complementary signal. Excludes pages missing a
+    title or H1 (see Missing Title, C041, and Missing H1, C049).
     """
-    raise NotImplementedError("C052 not yet implemented")
+    titles = pages_df["Title"].astype(str).str.strip()
+    h1s = pages_df["H1"].astype(str).str.strip()
+    mask = titles.ne("") & h1s.ne("") & titles.eq(h1s)
+    return pages_df.loc[mask, ["URL", "Title", "H1"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C055(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -142,7 +146,6 @@ def check_C065(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
 
 
 CHECKS = {
-    "C052": check_C052,
     "C055": check_C055,
     "C057": check_C057,
     "C058": check_C058,
