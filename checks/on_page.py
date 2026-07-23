@@ -7,6 +7,7 @@ title/description length. See checks/crawlability.py for the stub pattern.
 from typing import Any, Dict
 
 import pandas as pd
+from bs4 import BeautifulSoup
 
 TITLE_MIN_LENGTH = 30
 TITLE_MAX_LENGTH = 60
@@ -48,9 +49,17 @@ def check_C047(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL", "Description", "Description Length"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C050(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def _h1_count(html: Any) -> int:
+    if not html:
+        return 0
+    soup = BeautifulSoup(str(html), "html.parser")
+    return len(soup.find_all("h1"))
+
+
+def check_C050(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """multiple H1s (Warning · Page)"""
-    raise NotImplementedError("C050 not yet implemented")
+    counts = pages_df["HTML"].fillna("").apply(_h1_count)
+    return pages_df.loc[counts.gt(1), ["URL", "H1"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C052(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -123,7 +132,6 @@ def check_C065(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
 
 
 CHECKS = {
-    "C050": check_C050,
     "C052": check_C052,
     "C055": check_C055,
     "C057": check_C057,
