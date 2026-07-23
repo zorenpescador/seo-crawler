@@ -616,22 +616,28 @@ if st.session_state.crawl_results is not None:
 
         st.markdown("---")
 
+        # df_filtered has HTML dropped/truncated for on-screen display; the
+        # analysis tabs below need the real HTML, so re-attach it from df
+        # (same row alignment as df_filtered, since sanitize_for_display only
+        # drops/shortens columns, never rows).
+        df_analysis = df_filtered.copy()
+        df_analysis["HTML"] = df.loc[df_filtered.index, "HTML"]
+
         # Main Analysis Tabs
         analysis_tab1, analysis_tab2, analysis_tab3 = st.tabs([
             "📊 Organic Research",
             "� Site Health",
             "🧭 Site Audit"
         ])
-        
+
         with analysis_tab1:
-            # after df_filtered is computed (and it contains the HTML column):
-            org.render_streamlit_organic_ui(st, df_filtered, html_col="HTML")
-        
+            org.render_streamlit_organic_ui(st, df_analysis, html_col="HTML")
+
         with analysis_tab2:
-            hs.render_streamlit_health_score_ui(st, df_filtered)
-        
+            hs.render_streamlit_health_score_ui(st, df_analysis)
+
         with analysis_tab3:
-            sa.render_streamlit_site_audit_ui(st, df_filtered)
+            sa.render_streamlit_site_audit_ui(st, df_analysis)
 
         st.markdown("---")
 
