@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 import pandas as pd
 from bs4 import BeautifulSoup
 
+from checks.markup import check_C116
 from checks.on_page import check_C042, check_C043, check_C046, check_C047, check_C050, check_C052, check_C058, check_C059, check_C061, check_C062, check_C064, check_C065
 
 
@@ -158,6 +159,11 @@ FALLBACK_CHECK_CATALOG = {
         "severity": "Notice",
         "notes": "Pages are markup-heavy relative to visible text.",
     },
+    "Missing Favicon Link": {
+        "category": "Markup & Structured Data",
+        "severity": "Notice",
+        "notes": "Pages don't declare a favicon via a <link rel=icon> tag.",
+    },
     "Thin Content": {
         "category": "On-Page & Duplicates",
         "severity": "Warning",
@@ -222,6 +228,7 @@ CHECK_NAME_TO_CATALOG_ID = {
     "URL Contains Underscores": "C064",
     "URL Excessive Parameters": "C061",
     "Low Text-to-HTML Ratio": "C058",
+    "Missing Favicon Link": "C116",
     "Thin Content": "C053",
     "Low Internal Link Support": "C076",
     "Missing Schema": "C108",
@@ -421,6 +428,7 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
         ~work_df["HTML"].fillna("").apply(_has_viewport_meta)
     ][["URL"]].drop_duplicates().reset_index(drop=True)
     pages_missing_alt = _missing_alt_image_pages(work_df.set_index("URL")["HTML"])
+    missing_favicon = check_C116(work_df)
 
     internal_link_counts: Counter = Counter()
     for html in work_df.get("HTML", pd.Series([""] * len(work_df))).fillna(""):
@@ -674,6 +682,15 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
         affected_pages=len(missing_og),
         total_pages=total_pages,
         notes=_catalog_reference("Missing Open Graph Tags")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Missing Favicon Link")["category"],
+        check="Missing Favicon Link",
+        severity=_catalog_reference("Missing Favicon Link")["severity"],
+        affected_pages=len(missing_favicon),
+        total_pages=total_pages,
+        notes=_catalog_reference("Missing Favicon Link")["notes"],
     )
     _add_finding(
         findings,

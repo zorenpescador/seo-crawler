@@ -7,6 +7,7 @@ checks/crawlability.py for the pattern.
 from typing import Any, Dict
 
 import pandas as pd
+from bs4 import BeautifulSoup
 
 
 def check_C109(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -49,9 +50,22 @@ def check_C115(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C115 not yet implemented")
 
 
-def check_C116(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def _has_favicon_link(html: Any) -> bool:
+    if not html:
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    for link in soup.find_all("link"):
+        rel = link.get("rel")
+        rel_str = " ".join(rel) if isinstance(rel, list) else str(rel or "")
+        if "icon" in rel_str.lower():
+            return True
+    return False
+
+
+def check_C116(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """favicon not declared via link tag (Notice · Page)"""
-    raise NotImplementedError("C116 not yet implemented")
+    mask = ~pages_df["HTML"].fillna("").apply(_has_favicon_link)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 CHECKS = {
@@ -61,5 +75,4 @@ CHECKS = {
     "C113": check_C113,
     "C114": check_C114,
     "C115": check_C115,
-    "C116": check_C116,
 }
