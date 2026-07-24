@@ -96,7 +96,13 @@ def compute_tfidf_keywords(
     vectorizer = TfidfVectorizer(
         ngram_range=ngram_range, max_features=max_features, stop_words=stop_words, token_pattern=r"(?u)\b\w[\w\-]+\b"
     )
-    X = vectorizer.fit_transform(docs)
+    try:
+        X = vectorizer.fit_transform(docs)
+    except ValueError:
+        # Corpus too thin/sparse for TF-IDF to build any vocabulary (e.g. a
+        # single page with minimal text, or content that's entirely stop
+        # words) — no meaningful keywords to extract, not a real error.
+        return {i: [] for i in range(len(docs))}
     feature_names = vectorizer.get_feature_names_out()
 
     results = {}
