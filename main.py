@@ -4,6 +4,7 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
+import xml.etree.ElementTree as ET
 import pandas as pd
 import json
 import re
@@ -43,6 +44,60 @@ def allowed_by_robots(url, ignore_robots=False):
         return allowed, robots_url
     except Exception:
         return True, robots_url
+
+def fetch_site_context(base, session):
+    """Fetch robots.txt and sitemap.xml once per crawl for site-level checks.
+
+    Called once from crawl_site() and cached in st.session_state.crawl_metadata
+    alongside the crawl results, so it is not re-fetched on every Streamlit rerun.
+    """
+    site_ctx = {
+        "robots_txt": None,
+        "robots_txt_url": f"{base}/robots.txt",
+        "sitemap_url": None,
+        "sitemap_declared_in_robots": False,
+        "sitemap_found": False,
+        "sitemap_valid": None,
+        "sitemap_urls": [],
+    }
+
+    try:
+        r = session.get(site_ctx["robots_txt_url"], timeout=8)
+        if r.status_code == 200:
+            site_ctx["robots_txt"] = r.text
+    except Exception:
+        pass
+
+    sitemap_url = None
+    if site_ctx["robots_txt"]:
+        for line in site_ctx["robots_txt"].splitlines():
+            line = line.strip()
+            if line.lower().startswith("sitemap:"):
+                sitemap_url = line.split(":", 1)[1].strip()
+                site_ctx["sitemap_declared_in_robots"] = True
+                break
+    if not sitemap_url:
+        sitemap_url = f"{base}/sitemap.xml"
+    site_ctx["sitemap_url"] = sitemap_url
+
+    try:
+        r = session.get(sitemap_url, timeout=8)
+        if r.status_code == 200:
+            site_ctx["sitemap_found"] = True
+            try:
+                root = ET.fromstring(r.content)
+                site_ctx["sitemap_urls"] = [
+                    elem.text.strip()
+                    for elem in root.iter()
+                    if elem.tag.split("}")[-1] == "loc" and elem.text
+                ]
+                site_ctx["sitemap_valid"] = True
+            except ET.ParseError:
+                site_ctx["sitemap_valid"] = False
+    except Exception:
+        pass
+
+    return site_ctx
 
 def extract_schema_types(soup):
     schema_types = []
@@ -143,6 +198,8 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
     session = requests.Session()
     session.headers.update(HEADERS)
 
+    site_ctx = fetch_site_context(base, session)
+
     while to_visit and len(visited) < max_pages:
         url = to_visit.pop(0)
         url = normalize_url(url)
@@ -151,7 +208,7 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
 
         allowed, robots_url = allowed_by_robots(url, ignore_robots=ignore_robots)
         if not allowed:
-            return pd.DataFrame(), {"blocked": True, "robots_url": robots_url}
+            return pd.DataFrame(), {"blocked": True, "robots_url": robots_url, "site_ctx": site_ctx}
 
         if show_progress_cb:
             show_progress_cb(min(len(visited)/max_pages, 1.0), f"Crawling: {url}")
@@ -242,7 +299,13 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
                 "External Links": len(set(external_links)), "Link-to-Word Ratio": link_to_word,
                 "Schema": schema, "Content Type": content_type, "MIME Type": mime_type,
                 "Canonical URL": canonical_url, "OG Title": og_title, "OG Description": og_description,
-                "Crawl Time (s)": crawl_time, "HTML": html_excerpt, "Content Text": content_text
+                "Crawl Time (s)": crawl_time, "HTML": html_excerpt, "Content Text": content_text,
+                "Content-Encoding": r.headers.get("Content-Encoding", ""),
+                "Strict-Transport-Security": r.headers.get("Strict-Transport-Security", ""),
+                "X-Content-Type-Options": r.headers.get("X-Content-Type-Options", ""),
+                "X-Frame-Options": r.headers.get("X-Frame-Options", ""),
+                "Content-Security-Policy": r.headers.get("Content-Security-Policy", ""),
+                "Cache-Control": r.headers.get("Cache-Control", "")
             })
 
             for link in internal_links:
@@ -267,7 +330,7 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
             time.sleep(delay)
             continue
 
-    return pd.DataFrame(results), {"blocked": False}
+    return pd.DataFrame(results), {"blocked": False, "site_ctx": site_ctx}
 
 # ---------------------------
 # Streamlit UI
@@ -653,7 +716,7 @@ if st.session_state.crawl_results is not None:
             org.render_streamlit_organic_ui(st, df_analysis, html_col="HTML")
 
         with analysis_tab2:
-            hs.render_streamlit_health_score_ui(st, df_analysis)
+            hs.render_streamlit_health_score_ui(st, df_analysis, site_ctx=meta.get("site_ctx"))
 
         with analysis_tab3:
             sa.render_streamlit_site_audit_ui(st, df_analysis)

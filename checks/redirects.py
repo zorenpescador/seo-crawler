@@ -9,12 +9,45 @@ from urllib.parse import urlparse
 import pandas as pd
 from bs4 import BeautifulSoup
 
+from checks.architecture import _internal_links
 
-def check_C032(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+REDIRECT_STATUS_PREFIXES = ("301", "302", "303", "307", "308")
+MAX_REDIRECT_CHAIN_HOPS = 20
+
+
+def _redirect_target_map(pages_df: pd.DataFrame) -> Dict[str, str]:
+    if "Redirect Target" not in pages_df.columns:
+        return {}
+    is_redirect = pages_df["Status"].astype(str).str.startswith(REDIRECT_STATUS_PREFIXES)
+    targets = pages_df.loc[is_redirect, "Redirect Target"].fillna("").astype(str)
+    urls = pages_df.loc[is_redirect, "URL"].astype(str)
+    return {url: target for url, target in zip(urls, targets) if target}
+
+
+def check_C032(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """redirect loop (Error · Page)
-    Redirect chain returns to a previously visited URL.
+    Redirect chain returns to a previously visited URL. Only detects
+    loops fully contained within the crawled set (up to 20 hops).
     """
-    raise NotImplementedError("C032 not yet implemented")
+    redirect_map = _redirect_target_map(pages_df)
+    if not redirect_map:
+        return pages_df.iloc[0:0][["URL"]]
+
+    def _is_loop(start_url: str) -> bool:
+        seen = {start_url}
+        current = start_url
+        for _ in range(MAX_REDIRECT_CHAIN_HOPS):
+            next_url = redirect_map.get(current)
+            if not next_url:
+                return False
+            if next_url in seen:
+                return True
+            seen.add(next_url)
+            current = next_url
+        return False
+
+    mask = pages_df["URL"].astype(str).apply(lambda u: u in redirect_map and _is_loop(u))
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C033(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -24,18 +57,40 @@ def check_C033(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C033 not yet implemented")
 
 
-def check_C034(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C034(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """internal links pointing to a redirecting URL instead of final target (Warning · Page)
-    Wastes crawl budget / link equity.
+    Same underlying detection as Internal Link To Redirect (C072); the
+    catalog lists it under both Redirects and Site Architecture lenses.
     """
-    raise NotImplementedError("C034 not yet implemented")
+    status_map = dict(zip(pages_df["URL"].astype(str), pages_df["Status"].astype(str)))
+
+    def _has_redirect_link(row: pd.Series) -> bool:
+        for link in _internal_links(row.get("HTML"), row.get("URL")):
+            status = status_map.get(link["href"])
+            if status and status.startswith(REDIRECT_STATUS_PREFIXES):
+                return True
+        return False
+
+    mask = pages_df.apply(_has_redirect_link, axis=1)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C035(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C035(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """redirect to a 4XX/5XX destination (Error · Page)
-    Redirect resolves to a broken page.
+    Only catches destinations that are themselves in the crawled set.
     """
-    raise NotImplementedError("C035 not yet implemented")
+    status_map = dict(zip(pages_df["URL"].astype(str), pages_df["Status"].astype(str)))
+    redirect_map = _redirect_target_map(pages_df)
+
+    def _target_is_broken(url: str) -> bool:
+        target = redirect_map.get(url)
+        if not target:
+            return False
+        target_status = status_map.get(target)
+        return bool(target_status) and target_status.startswith(("4", "5"))
+
+    mask = pages_df["URL"].astype(str).apply(_target_is_broken)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def _has_meta_refresh(html: Any) -> bool:
@@ -83,11 +138,32 @@ def check_C038(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df[pages_df["URL"].astype(str).isin(affected_urls)][["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C039(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def _is_multi_hop_https_upgrade(url: str, redirect_map: Dict[str, str]) -> bool:
+    if not url.startswith("http://"):
+        return False
+    hops = 0
+    current = url
+    seen = {url}
+    for _ in range(MAX_REDIRECT_CHAIN_HOPS):
+        next_url = redirect_map.get(current)
+        if not next_url or next_url in seen:
+            break
+        hops += 1
+        current = next_url
+        seen.add(current)
+    return hops > 1 and current.startswith("https://")
+
+
+def check_C039(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """HTTP->HTTPS redirect chain longer than 1 hop (Warning · Page)
-    Protocol upgrade adds unnecessary hops.
+    Protocol upgrade adds unnecessary hops. Only detectable when the
+    whole chain is within the crawled set.
     """
-    raise NotImplementedError("C039 not yet implemented")
+    redirect_map = _redirect_target_map(pages_df)
+    if not redirect_map:
+        return pages_df.iloc[0:0][["URL"]]
+    mask = pages_df["URL"].astype(str).apply(lambda u: _is_multi_hop_https_upgrade(u, redirect_map))
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C040(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -98,10 +174,6 @@ def check_C040(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
 
 
 CHECKS = {
-    "C032": check_C032,
     "C033": check_C033,
-    "C034": check_C034,
-    "C035": check_C035,
-    "C039": check_C039,
     "C040": check_C040,
 }

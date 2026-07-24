@@ -9,19 +9,27 @@ from bs4 import BeautifulSoup
 
 from checks.architecture import (
     check_C067, check_C068, check_C070, check_C071, check_C072, check_C073, check_C074,
-    check_C077, check_C078, check_C079,
+    check_C075, check_C077, check_C078, check_C079,
 )
-from checks.crawlability import check_C012, check_C013, check_C014, check_C015, check_C017, check_C018, check_C019, check_C020
+from checks.crawlability import (
+    check_C001, check_C002, check_C003, check_C004, check_C005, check_C006, check_C007,
+    check_C008, check_C009, check_C010, check_C012, check_C013, check_C014, check_C015,
+    check_C017, check_C018, check_C019, check_C020,
+)
 from checks.international import (
-    check_C096, check_C097, check_C098, check_C100, check_C101, check_C102, check_C104, check_C106,
+    check_C096, check_C097, check_C098, check_C099, check_C100, check_C101, check_C102,
+    check_C104, check_C106,
 )
-from checks.links import check_C082, check_C086, check_C088, check_C089, check_C090, check_C092, check_C094, check_C095
+from checks.links import (
+    check_C082, check_C086, check_C088, check_C089, check_C090, check_C092, check_C093,
+    check_C094, check_C095,
+)
 from checks.markup import check_C109, check_C110, check_C111, check_C113, check_C116
 from checks.mobile import check_C129, check_C131, check_C132, check_C134
 from checks.performance import check_C121, check_C122, check_C123, check_C124, check_C125, check_C127
 from checks.on_page import check_C042, check_C043, check_C046, check_C047, check_C050, check_C052, check_C058, check_C059, check_C060, check_C061, check_C062, check_C063, check_C064, check_C065
-from checks.redirects import check_C036, check_C037, check_C038
-from checks.security import check_C023
+from checks.redirects import check_C032, check_C034, check_C035, check_C036, check_C037, check_C038, check_C039
+from checks.security import check_C023, check_C024, check_C025, check_C030
 
 
 SEVERITY_WEIGHTS = {
@@ -447,6 +455,106 @@ FALLBACK_CHECK_CATALOG = {
         "severity": "Notice",
         "notes": "Pages have a high density of inline links relative to word count, a tap-target risk.",
     },
+    "Robots Txt Missing": {
+        "category": "Crawlability & Indexability",
+        "severity": "Warning",
+        "notes": "No robots.txt found at the domain root.",
+    },
+    "Robots Txt Invalid": {
+        "category": "Crawlability & Indexability",
+        "severity": "Warning",
+        "notes": "robots.txt contains a line that isn't a recognized directive.",
+    },
+    "Robots Txt Blocks Site": {
+        "category": "Crawlability & Indexability",
+        "severity": "Error",
+        "notes": "robots.txt disallows the entire site for all user-agents.",
+    },
+    "Robots Txt Blocks Assets": {
+        "category": "Crawlability & Indexability",
+        "severity": "Warning",
+        "notes": "robots.txt disallows a common CSS/JS asset path.",
+    },
+    "Sitemap Missing": {
+        "category": "Crawlability & Indexability",
+        "severity": "Warning",
+        "notes": "No sitemap found, whether declared in robots.txt or at /sitemap.xml.",
+    },
+    "Sitemap Invalid": {
+        "category": "Crawlability & Indexability",
+        "severity": "Error",
+        "notes": "The sitemap was found but failed to parse as XML.",
+    },
+    "Sitemap Contains Broken URLs": {
+        "category": "Crawlability & Indexability",
+        "severity": "Error",
+        "notes": "URLs listed in the sitemap return a 4XX/5XX status in the crawled set.",
+    },
+    "Sitemap Contains Redirected URLs": {
+        "category": "Crawlability & Indexability",
+        "severity": "Warning",
+        "notes": "URLs listed in the sitemap redirect elsewhere in the crawled set.",
+    },
+    "Sitemap Contains Noindex URLs": {
+        "category": "Crawlability & Indexability",
+        "severity": "Warning",
+        "notes": "URLs listed in the sitemap carry a noindex directive.",
+    },
+    "Sitemap Not In Robots": {
+        "category": "Crawlability & Indexability",
+        "severity": "Notice",
+        "notes": "A sitemap exists but isn't declared in robots.txt.",
+    },
+    "No HTTP-To-HTTPS Redirect": {
+        "category": "HTTPS & Security",
+        "severity": "Error",
+        "notes": "The http:// version of a crawled URL doesn't redirect to https://.",
+    },
+    "Missing HSTS Header": {
+        "category": "HTTPS & Security",
+        "severity": "Warning",
+        "notes": "HTTPS pages don't send a Strict-Transport-Security header.",
+    },
+    "Missing Security Headers": {
+        "category": "HTTPS & Security",
+        "severity": "Notice",
+        "notes": "Pages send none of X-Content-Type-Options, X-Frame-Options, or Content-Security-Policy.",
+    },
+    "Redirect Loop": {
+        "category": "Redirects",
+        "severity": "Error",
+        "notes": "A redirect chain returns to a previously visited URL.",
+    },
+    "Internal Link To Redirect (Redirects Lens)": {
+        "category": "Redirects",
+        "severity": "Warning",
+        "notes": "Pages link internally to a URL that redirects instead of the final target.",
+    },
+    "Redirect To Broken Destination": {
+        "category": "Redirects",
+        "severity": "Error",
+        "notes": "A redirect resolves to a URL that returns a 4XX/5XX status in the crawled set.",
+    },
+    "Multi-Hop HTTPS Upgrade": {
+        "category": "Redirects",
+        "severity": "Warning",
+        "notes": "The http:// to https:// upgrade takes more than one redirect hop.",
+    },
+    "Anchor Text Mismatch": {
+        "category": "Site Architecture & Internal Linking",
+        "severity": "Notice",
+        "notes": "An internal link's anchor text shares no significant words with its destination's title/H1.",
+    },
+    "Unmarked Affiliate Link": {
+        "category": "Links",
+        "severity": "Notice",
+        "notes": "A link to a known affiliate network lacks rel=sponsored or rel=nofollow.",
+    },
+    "Hreflang Points To Redirect": {
+        "category": "International SEO",
+        "severity": "Warning",
+        "notes": "An hreflang target redirects instead of resolving directly, in the crawled set.",
+    },
     "Thin Content": {
         "category": "On-Page & Duplicates",
         "severity": "Warning",
@@ -566,6 +674,26 @@ CHECK_NAME_TO_CATALOG_ID = {
     "Unlazy Below-Fold Images": "C125",
     "Empty Alt Attribute": "C131",
     "Dense Tap Targets": "C132",
+    "Robots Txt Missing": "C001",
+    "Robots Txt Invalid": "C002",
+    "Robots Txt Blocks Site": "C003",
+    "Robots Txt Blocks Assets": "C004",
+    "Sitemap Missing": "C005",
+    "Sitemap Invalid": "C006",
+    "Sitemap Contains Broken URLs": "C007",
+    "Sitemap Contains Redirected URLs": "C008",
+    "Sitemap Contains Noindex URLs": "C009",
+    "Sitemap Not In Robots": "C010",
+    "No HTTP-To-HTTPS Redirect": "C024",
+    "Missing HSTS Header": "C025",
+    "Missing Security Headers": "C030",
+    "Redirect Loop": "C032",
+    "Internal Link To Redirect (Redirects Lens)": "C034",
+    "Redirect To Broken Destination": "C035",
+    "Multi-Hop HTTPS Upgrade": "C039",
+    "Anchor Text Mismatch": "C075",
+    "Unmarked Affiliate Link": "C093",
+    "Hreflang Points To Redirect": "C099",
     "Thin Content": "C053",
     "Low Internal Link Support": "C076",
     "Missing Schema": "C108",
@@ -695,7 +823,8 @@ def _add_finding(findings: List[Dict[str, Any]], *, category: str, check: str, s
     })
 
 
-def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
+def build_site_health_report(df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> Dict[str, Any]:
+    site_ctx = site_ctx or {}
     if df is None or df.empty:
         return {
             "health_score": 100,
@@ -805,6 +934,26 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
     unlazy_below_fold_images = check_C125(work_df)
     empty_alt_attribute = check_C131(work_df)
     dense_tap_targets = check_C132(work_df)
+    robots_txt_missing = check_C001(work_df, site_ctx=site_ctx)
+    robots_txt_invalid = check_C002(work_df, site_ctx=site_ctx)
+    robots_txt_blocks_site = check_C003(work_df, site_ctx=site_ctx)
+    robots_txt_blocks_assets = check_C004(work_df, site_ctx=site_ctx)
+    sitemap_missing = check_C005(work_df, site_ctx=site_ctx)
+    sitemap_invalid = check_C006(work_df, site_ctx=site_ctx)
+    sitemap_contains_broken_urls = check_C007(work_df, site_ctx=site_ctx)
+    sitemap_contains_redirected_urls = check_C008(work_df, site_ctx=site_ctx)
+    sitemap_contains_noindex_urls = check_C009(work_df, site_ctx=site_ctx)
+    sitemap_not_in_robots = check_C010(work_df, site_ctx=site_ctx)
+    no_http_to_https_redirect = check_C024(work_df)
+    missing_hsts_header = check_C025(work_df)
+    missing_security_headers = check_C030(work_df)
+    redirect_loop = check_C032(work_df)
+    internal_link_to_redirect_redirects_lens = check_C034(work_df)
+    redirect_to_broken_destination = check_C035(work_df)
+    multi_hop_https_upgrade = check_C039(work_df)
+    anchor_text_mismatch = check_C075(work_df)
+    unmarked_affiliate_link = check_C093(work_df)
+    hreflang_points_to_redirect = check_C099(work_df)
     non_https_pages = work_df[~work_df["URL"].astype(str).str.startswith("https://")][["URL"]].drop_duplicates().reset_index(drop=True)
     redirect_pages = work_df[work_df["Status"].astype(str).str.startswith(("301", "302", "303", "307", "308"))][["URL"]].drop_duplicates().reset_index(drop=True)
     missing_schema = work_df[work_df["Schema"].astype(str).str.strip().eq("")][["URL"]].drop_duplicates().reset_index(drop=True)
@@ -1580,6 +1729,186 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
     )
     _add_finding(
         findings,
+        category=_catalog_reference("Robots Txt Missing")["category"],
+        check="Robots Txt Missing",
+        severity=_catalog_reference("Robots Txt Missing")["severity"],
+        affected_pages=len(robots_txt_missing),
+        total_pages=total_pages,
+        notes=_catalog_reference("Robots Txt Missing")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Robots Txt Invalid")["category"],
+        check="Robots Txt Invalid",
+        severity=_catalog_reference("Robots Txt Invalid")["severity"],
+        affected_pages=len(robots_txt_invalid),
+        total_pages=total_pages,
+        notes=_catalog_reference("Robots Txt Invalid")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Robots Txt Blocks Site")["category"],
+        check="Robots Txt Blocks Site",
+        severity=_catalog_reference("Robots Txt Blocks Site")["severity"],
+        affected_pages=len(robots_txt_blocks_site),
+        total_pages=total_pages,
+        notes=_catalog_reference("Robots Txt Blocks Site")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Robots Txt Blocks Assets")["category"],
+        check="Robots Txt Blocks Assets",
+        severity=_catalog_reference("Robots Txt Blocks Assets")["severity"],
+        affected_pages=len(robots_txt_blocks_assets),
+        total_pages=total_pages,
+        notes=_catalog_reference("Robots Txt Blocks Assets")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Sitemap Missing")["category"],
+        check="Sitemap Missing",
+        severity=_catalog_reference("Sitemap Missing")["severity"],
+        affected_pages=len(sitemap_missing),
+        total_pages=total_pages,
+        notes=_catalog_reference("Sitemap Missing")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Sitemap Invalid")["category"],
+        check="Sitemap Invalid",
+        severity=_catalog_reference("Sitemap Invalid")["severity"],
+        affected_pages=len(sitemap_invalid),
+        total_pages=total_pages,
+        notes=_catalog_reference("Sitemap Invalid")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Sitemap Contains Broken URLs")["category"],
+        check="Sitemap Contains Broken URLs",
+        severity=_catalog_reference("Sitemap Contains Broken URLs")["severity"],
+        affected_pages=len(sitemap_contains_broken_urls),
+        total_pages=total_pages,
+        notes=_catalog_reference("Sitemap Contains Broken URLs")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Sitemap Contains Redirected URLs")["category"],
+        check="Sitemap Contains Redirected URLs",
+        severity=_catalog_reference("Sitemap Contains Redirected URLs")["severity"],
+        affected_pages=len(sitemap_contains_redirected_urls),
+        total_pages=total_pages,
+        notes=_catalog_reference("Sitemap Contains Redirected URLs")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Sitemap Contains Noindex URLs")["category"],
+        check="Sitemap Contains Noindex URLs",
+        severity=_catalog_reference("Sitemap Contains Noindex URLs")["severity"],
+        affected_pages=len(sitemap_contains_noindex_urls),
+        total_pages=total_pages,
+        notes=_catalog_reference("Sitemap Contains Noindex URLs")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Sitemap Not In Robots")["category"],
+        check="Sitemap Not In Robots",
+        severity=_catalog_reference("Sitemap Not In Robots")["severity"],
+        affected_pages=len(sitemap_not_in_robots),
+        total_pages=total_pages,
+        notes=_catalog_reference("Sitemap Not In Robots")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("No HTTP-To-HTTPS Redirect")["category"],
+        check="No HTTP-To-HTTPS Redirect",
+        severity=_catalog_reference("No HTTP-To-HTTPS Redirect")["severity"],
+        affected_pages=len(no_http_to_https_redirect),
+        total_pages=total_pages,
+        notes=_catalog_reference("No HTTP-To-HTTPS Redirect")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Missing HSTS Header")["category"],
+        check="Missing HSTS Header",
+        severity=_catalog_reference("Missing HSTS Header")["severity"],
+        affected_pages=len(missing_hsts_header),
+        total_pages=total_pages,
+        notes=_catalog_reference("Missing HSTS Header")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Missing Security Headers")["category"],
+        check="Missing Security Headers",
+        severity=_catalog_reference("Missing Security Headers")["severity"],
+        affected_pages=len(missing_security_headers),
+        total_pages=total_pages,
+        notes=_catalog_reference("Missing Security Headers")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Redirect Loop")["category"],
+        check="Redirect Loop",
+        severity=_catalog_reference("Redirect Loop")["severity"],
+        affected_pages=len(redirect_loop),
+        total_pages=total_pages,
+        notes=_catalog_reference("Redirect Loop")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Internal Link To Redirect (Redirects Lens)")["category"],
+        check="Internal Link To Redirect (Redirects Lens)",
+        severity=_catalog_reference("Internal Link To Redirect (Redirects Lens)")["severity"],
+        affected_pages=len(internal_link_to_redirect_redirects_lens),
+        total_pages=total_pages,
+        notes=_catalog_reference("Internal Link To Redirect (Redirects Lens)")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Redirect To Broken Destination")["category"],
+        check="Redirect To Broken Destination",
+        severity=_catalog_reference("Redirect To Broken Destination")["severity"],
+        affected_pages=len(redirect_to_broken_destination),
+        total_pages=total_pages,
+        notes=_catalog_reference("Redirect To Broken Destination")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Multi-Hop HTTPS Upgrade")["category"],
+        check="Multi-Hop HTTPS Upgrade",
+        severity=_catalog_reference("Multi-Hop HTTPS Upgrade")["severity"],
+        affected_pages=len(multi_hop_https_upgrade),
+        total_pages=total_pages,
+        notes=_catalog_reference("Multi-Hop HTTPS Upgrade")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Anchor Text Mismatch")["category"],
+        check="Anchor Text Mismatch",
+        severity=_catalog_reference("Anchor Text Mismatch")["severity"],
+        affected_pages=len(anchor_text_mismatch),
+        total_pages=total_pages,
+        notes=_catalog_reference("Anchor Text Mismatch")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Unmarked Affiliate Link")["category"],
+        check="Unmarked Affiliate Link",
+        severity=_catalog_reference("Unmarked Affiliate Link")["severity"],
+        affected_pages=len(unmarked_affiliate_link),
+        total_pages=total_pages,
+        notes=_catalog_reference("Unmarked Affiliate Link")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Hreflang Points To Redirect")["category"],
+        check="Hreflang Points To Redirect",
+        severity=_catalog_reference("Hreflang Points To Redirect")["severity"],
+        affected_pages=len(hreflang_points_to_redirect),
+        total_pages=total_pages,
+        notes=_catalog_reference("Hreflang Points To Redirect")["notes"],
+    )
+    _add_finding(
+        findings,
         category=_catalog_reference("Missing Viewport Meta")["category"],
         check="Missing Viewport Meta",
         severity=_catalog_reference("Missing Viewport Meta")["severity"],
@@ -1643,11 +1972,11 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
-def render_streamlit_health_score_ui(st, df: pd.DataFrame):
+def render_streamlit_health_score_ui(st, df: pd.DataFrame, site_ctx: Dict[str, Any] = None):
     st.subheader("🩺 Site Health")
     st.markdown("WEM-style site health scoring built from category deductions, quick wins, and site-wide crawl patterns.")
 
-    report = build_site_health_report(df)
+    report = build_site_health_report(df, site_ctx=site_ctx)
     health_score = report["health_score"]
 
     score_col, grade_col, pages_col, issues_col = st.columns(4)

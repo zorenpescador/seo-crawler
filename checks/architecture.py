@@ -159,11 +159,43 @@ def check_C074(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C075(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+ANCHOR_STOPWORDS = {
+    "the", "and", "for", "with", "this", "that", "from", "your", "here", "more",
+    "page", "read", "click", "learn", "about", "into", "over", "than",
+}
+
+
+def _significant_words(text: str) -> set:
+    words = re.findall(r"[a-z0-9]+", str(text).lower())
+    return {w for w in words if len(w) >= 4 and w not in ANCHOR_STOPWORDS}
+
+
+def check_C075(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """internal link anchor text mismatch vs destination topic (Notice · Page)
-    Heuristic keyword overlap check.
+    Heuristic keyword overlap check: an anchor with at least one
+    significant word (4+ chars, not a stopword) that shares none of its
+    words with the destination page's Title/H1. Only checks destinations
+    that are themselves in the crawled set.
     """
-    raise NotImplementedError("C075 not yet implemented")
+    topic_words_by_url = {
+        str(row["URL"]): _significant_words(f"{row.get('Title', '')} {row.get('H1', '')}")
+        for _, row in pages_df.iterrows()
+    }
+
+    def _has_mismatch(row: pd.Series) -> bool:
+        for link in _internal_links(row.get("HTML"), row.get("URL")):
+            anchor_words = _significant_words(link["text"])
+            if not anchor_words:
+                continue
+            target_words = topic_words_by_url.get(link["href"])
+            if target_words is None or not target_words:
+                continue
+            if not (anchor_words & target_words):
+                return True
+        return False
+
+    mask = pages_df.apply(_has_mismatch, axis=1)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 LINK_COUNT_ANOMALY_RATIO = 0.3
@@ -245,6 +277,5 @@ def check_C080(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
 
 CHECKS = {
     "C069": check_C069,
-    "C075": check_C075,
     "C080": check_C080,
 }

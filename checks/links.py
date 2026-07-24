@@ -183,9 +183,40 @@ def check_C092(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C093(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """affiliate/sponsored links missing rel=sponsored or nofollow (Notice · Page)"""
-    raise NotImplementedError("C093 not yet implemented")
+KNOWN_AFFILIATE_DOMAINS = (
+    "amzn.to", "amazon.", "awin1.com", "shareasale.com", "cj.com", "clickbank.net",
+    "rakuten", "linksynergy.com", "impact.com", "partnerize.com",
+)
+
+
+def _is_known_affiliate_link(href: str) -> bool:
+    parsed = urlparse(href)
+    netloc = parsed.netloc.lower()
+    if any(domain in netloc for domain in KNOWN_AFFILIATE_DOMAINS):
+        return True
+    return "tag=" in parsed.query.lower() and "amazon." in netloc
+
+
+def check_C093(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """affiliate/sponsored links missing rel=sponsored or nofollow (Notice · Page)
+    Narrow heuristic: only flags links to a small set of well-known
+    affiliate networks/domains, not a general affiliate-link detector.
+    """
+    def _has_unmarked_affiliate_link(html: Any) -> bool:
+        if not html:
+            return False
+        soup = BeautifulSoup(str(html), "html.parser")
+        for a in soup.find_all("a", href=True):
+            if not _is_known_affiliate_link(a["href"]):
+                continue
+            rel = a.get("rel") or []
+            rel_str = " ".join(rel) if isinstance(rel, list) else str(rel)
+            if "sponsored" not in rel_str.lower() and "nofollow" not in rel_str.lower():
+                return True
+        return False
+
+    mask = pages_df["HTML"].fillna("").apply(_has_unmarked_affiliate_link)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def _has_javascript_void_link(html: Any) -> bool:
@@ -231,5 +262,4 @@ CHECKS = {
     "C085": check_C085,
     "C087": check_C087,
     "C091": check_C091,
-    "C093": check_C093,
 }

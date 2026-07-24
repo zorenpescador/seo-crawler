@@ -39,18 +39,34 @@ def check_C023(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C024(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C024(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """no automatic HTTP->HTTPS redirect (Error · Site)
-    http:// version does not redirect to https://.
+    http:// version does not redirect to https://. Only checks http://
+    URLs actually encountered during the crawl; doesn't proactively fetch
+    the http:// variant of every https:// page.
     """
-    raise NotImplementedError("C024 not yet implemented")
+    http_urls = pages_df["URL"].astype(str).str.startswith("http://")
+    if not http_urls.any():
+        return pages_df.iloc[0:0][["URL"]]
+    redirect_target = pages_df.get("Redirect Target", pd.Series([""] * len(pages_df), index=pages_df.index))
+    redirect_target = redirect_target.fillna("").astype(str)
+    is_redirect = pages_df["Status"].astype(str).str.startswith(("301", "302", "303", "307", "308"))
+    upgrades_to_https = is_redirect & redirect_target.str.startswith("https://")
+    mask = http_urls & ~upgrades_to_https
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C025(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C025(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """missing HSTS header (Warning · Site)
-    Strict-Transport-Security header absent.
+    Strict-Transport-Security header absent. Only meaningful for HTTPS
+    pages; requires the crawler to have captured response headers.
     """
-    raise NotImplementedError("C025 not yet implemented")
+    if "Strict-Transport-Security" not in pages_df.columns:
+        return pages_df.iloc[0:0][["URL"]]
+    is_https = pages_df["URL"].astype(str).str.startswith("https://")
+    missing_hsts = pages_df["Strict-Transport-Security"].fillna("").astype(str).str.strip().eq("")
+    mask = is_https & missing_hsts
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C026(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -81,20 +97,28 @@ def check_C029(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C029 not yet implemented")
 
 
-def check_C030(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+SECURITY_HEADER_COLUMNS = ["X-Content-Type-Options", "X-Frame-Options", "Content-Security-Policy"]
+
+
+def check_C030(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """missing security headers (X-Content-Type-Options, X-Frame-Options, CSP) (Notice · Page)
-    Common hardening headers absent.
+    Common hardening headers absent. Flags pages missing all three,
+    rather than any one, to avoid noise from the fact that CSP in
+    particular is uncommon even on well-secured sites.
     """
-    raise NotImplementedError("C030 not yet implemented")
+    for col in SECURITY_HEADER_COLUMNS:
+        if col not in pages_df.columns:
+            return pages_df.iloc[0:0][["URL"]]
+    missing_all = pages_df[SECURITY_HEADER_COLUMNS].fillna("").apply(
+        lambda row: all(str(v).strip() == "" for v in row), axis=1
+    )
+    return pages_df.loc[missing_all, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 CHECKS = {
     "C022": check_C022,
-    "C024": check_C024,
-    "C025": check_C025,
     "C026": check_C026,
     "C027": check_C027,
     "C028": check_C028,
     "C029": check_C029,
-    "C030": check_C030,
 }

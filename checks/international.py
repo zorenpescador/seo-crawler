@@ -81,9 +81,21 @@ def check_C098(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C099(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """hreflang points to a redirected URL (Warning · Page)"""
-    raise NotImplementedError("C099 not yet implemented")
+def check_C099(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """hreflang points to a redirected URL (Warning · Page)
+    Only catches targets that are themselves in the crawled URL set.
+    """
+    status_map = dict(zip(pages_df["URL"].astype(str), pages_df["Status"].astype(str)))
+
+    def _points_to_redirect(html: Any) -> bool:
+        for entry in _hreflang_entries(html):
+            status = status_map.get(entry["href"])
+            if status and status.startswith(("301", "302", "303", "307", "308")):
+                return True
+        return False
+
+    mask = pages_df["HTML"].fillna("").apply(_points_to_redirect)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C100(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
@@ -187,7 +199,6 @@ def check_C107(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
 
 
 CHECKS = {
-    "C099": check_C099,
     "C103": check_C103,
     "C105": check_C105,
     "C107": check_C107,

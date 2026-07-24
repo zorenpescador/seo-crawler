@@ -17,6 +17,8 @@ SOFT_404_TEXT_PATTERN = re.compile(
     r"\b(page not found|404 error|error 404|not found|doesn't exist|does not exist)\b", re.IGNORECASE
 )
 SOFT_404_WORD_COUNT_MAX = 200
+ROBOTS_KNOWN_DIRECTIVES = {"user-agent", "disallow", "allow", "sitemap", "crawl-delay", "host"}
+ROBOTS_ASSET_PATH_PATTERN = re.compile(r"\.(css|js)(\?|$)|/(assets|static|wp-content|wp-includes)/", re.IGNORECASE)
 
 
 def _robots_meta_content(html: Any) -> str:
@@ -29,74 +31,155 @@ def _robots_meta_content(html: Any) -> str:
     return str(meta.get("content", "")).lower()
 
 
-def check_C001(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def _all_urls(pages_df: pd.DataFrame) -> pd.DataFrame:
+    """Site-level issue confirmed: every crawled page counts as affected."""
+    return pages_df[["URL"]].drop_duplicates().reset_index(drop=True)
+
+
+def _no_urls(pages_df: pd.DataFrame) -> pd.DataFrame:
+    return pages_df.iloc[0:0][["URL"]]
+
+
+def check_C001(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """robots.txt missing (Warning · Site)
-    No robots.txt found at domain root.
+    No robots.txt found at domain root. Site-level: every crawled page
+    counts as affected when the finding applies, since it's a whole-site
+    condition rather than a per-page one.
     """
-    raise NotImplementedError("C001 not yet implemented")
+    site_ctx = site_ctx or {}
+    if site_ctx.get("robots_txt") is None:
+        return _all_urls(pages_df)
+    return _no_urls(pages_df)
 
 
-def check_C002(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C002(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """robots.txt not valid (syntax errors) (Warning · Site)
-    robots.txt contains malformed directives.
+    Heuristic: any non-comment, non-blank line whose directive isn't one
+    of the recognized robots.txt directives.
     """
-    raise NotImplementedError("C002 not yet implemented")
+    site_ctx = site_ctx or {}
+    robots_txt = site_ctx.get("robots_txt")
+    if not robots_txt:
+        return _no_urls(pages_df)
+    for line in robots_txt.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        directive = line.split(":", 1)[0].strip().lower()
+        if directive not in ROBOTS_KNOWN_DIRECTIVES:
+            return _all_urls(pages_df)
+    return _no_urls(pages_df)
 
 
-def check_C003(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C003(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """robots.txt blocks entire site (Error · Site)
-    Disallow: / found for relevant user-agents.
+    Disallow: / found under a wildcard (User-agent: *) block.
     """
-    raise NotImplementedError("C003 not yet implemented")
+    site_ctx = site_ctx or {}
+    robots_txt = site_ctx.get("robots_txt")
+    if not robots_txt:
+        return _no_urls(pages_df)
+    current_agent_is_wildcard = False
+    for line in robots_txt.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        directive, _, value = line.partition(":")
+        directive = directive.strip().lower()
+        value = value.strip()
+        if directive == "user-agent":
+            current_agent_is_wildcard = value == "*"
+        elif directive == "disallow" and current_agent_is_wildcard and value == "/":
+            return _all_urls(pages_df)
+    return _no_urls(pages_df)
 
 
-def check_C004(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C004(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """robots.txt blocks CSS/JS resources (Warning · Site)
-    Rendering-critical assets disallowed.
+    Heuristic: a Disallow rule targets a path with a .css/.js extension
+    or a common asset directory (assets, static, wp-content, wp-includes).
     """
-    raise NotImplementedError("C004 not yet implemented")
+    site_ctx = site_ctx or {}
+    robots_txt = site_ctx.get("robots_txt")
+    if not robots_txt:
+        return _no_urls(pages_df)
+    for line in robots_txt.splitlines():
+        line = line.strip()
+        if not line.lower().startswith("disallow:"):
+            continue
+        value = line.split(":", 1)[1].strip()
+        if value and ROBOTS_ASSET_PATH_PATTERN.search(value):
+            return _all_urls(pages_df)
+    return _no_urls(pages_df)
 
 
-def check_C005(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C005(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """sitemap.xml missing (Warning · Site)
-    No sitemap referenced in robots.txt or at /sitemap.xml.
+    No sitemap referenced in robots.txt or found at /sitemap.xml.
     """
-    raise NotImplementedError("C005 not yet implemented")
+    site_ctx = site_ctx or {}
+    if not site_ctx.get("sitemap_found"):
+        return _all_urls(pages_df)
+    return _no_urls(pages_df)
 
 
-def check_C006(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C006(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """sitemap.xml not valid XML (Error · Site)
     Sitemap fails to parse.
     """
-    raise NotImplementedError("C006 not yet implemented")
+    site_ctx = site_ctx or {}
+    if site_ctx.get("sitemap_found") and site_ctx.get("sitemap_valid") is False:
+        return _all_urls(pages_df)
+    return _no_urls(pages_df)
 
 
-def check_C007(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C007(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """sitemap contains 4XX/5XX URLs (Error · Site)
-    URLs listed in sitemap return client/server errors.
+    Only checks sitemap URLs that are themselves in the crawled set.
     """
-    raise NotImplementedError("C007 not yet implemented")
+    site_ctx = site_ctx or {}
+    sitemap_urls = set(site_ctx.get("sitemap_urls") or [])
+    if not sitemap_urls:
+        return _no_urls(pages_df)
+    mask = pages_df["URL"].astype(str).isin(sitemap_urls) & pages_df["Status"].astype(str).str.startswith(("4", "5"))
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C008(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C008(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """sitemap contains redirected URLs (Warning · Site)
-    URLs listed in sitemap 3XX-redirect elsewhere.
+    Only checks sitemap URLs that are themselves in the crawled set.
     """
-    raise NotImplementedError("C008 not yet implemented")
+    site_ctx = site_ctx or {}
+    sitemap_urls = set(site_ctx.get("sitemap_urls") or [])
+    if not sitemap_urls:
+        return _no_urls(pages_df)
+    mask = pages_df["URL"].astype(str).isin(sitemap_urls) & pages_df["Status"].astype(str).str.startswith(
+        ("301", "302", "303", "307", "308")
+    )
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C009(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C009(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """sitemap contains noindex URLs (Warning · Site)
-    URLs in sitemap carry a noindex directive.
+    Only checks sitemap URLs that are themselves in the crawled set.
     """
-    raise NotImplementedError("C009 not yet implemented")
+    site_ctx = site_ctx or {}
+    sitemap_urls = set(site_ctx.get("sitemap_urls") or [])
+    if not sitemap_urls:
+        return _no_urls(pages_df)
+    is_noindex = pages_df["HTML"].fillna("").apply(lambda html: "noindex" in _robots_meta_content(html))
+    mask = pages_df["URL"].astype(str).isin(sitemap_urls) & is_noindex
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C010(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C010(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """sitemap not referenced in robots.txt (Notice · Site)
     Sitemap exists but isn't declared.
     """
-    raise NotImplementedError("C010 not yet implemented")
+    site_ctx = site_ctx or {}
+    if site_ctx.get("sitemap_found") and not site_ctx.get("sitemap_declared_in_robots"):
+        return _all_urls(pages_df)
+    return _no_urls(pages_df)
 
 
 def check_C011(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -242,16 +325,6 @@ def check_C020(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
 
 
 CHECKS = {
-    "C001": check_C001,
-    "C002": check_C002,
-    "C003": check_C003,
-    "C004": check_C004,
-    "C005": check_C005,
-    "C006": check_C006,
-    "C007": check_C007,
-    "C008": check_C008,
-    "C009": check_C009,
-    "C010": check_C010,
     "C011": check_C011,
     "C016": check_C016,
 }
