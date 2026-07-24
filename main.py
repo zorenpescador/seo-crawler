@@ -359,7 +359,7 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
             if 300 <= status_code < 400:
                 redirect_target = normalize_url(urljoin(url, r.headers.get("Location", "")))
                 results.append({
-                    "URL": url, "Status": status_code, "Crawl Status": "Redirect",
+                    "URL": url, "Status": str(status_code), "Crawl Status": "Redirect",
                     "Title": "", "Title Length": 0, "Description": "", "Description Length": 0,
                     "H1": "", "H Tags": "", "Word Count": 0, "Heading Count": 0, "Image Count": 0,
                     "Internal Links": 0, "External Links": 0, "Link-to-Word Ratio": 0,
@@ -377,7 +377,7 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
 
             if status_code >= 400:
                 results.append({
-                    "URL": url, "Status": status_code, "Crawl Status": "HTTP Error",
+                    "URL": url, "Status": str(status_code), "Crawl Status": "HTTP Error",
                     "Title": "", "Title Length": 0, "Description": "", "Description Length": 0,
                     "H1": "", "H Tags": "", "Word Count": 0, "Heading Count": 0, "Image Count": 0,
                     "Internal Links": 0, "External Links": 0, "Link-to-Word Ratio": 0,
@@ -439,7 +439,7 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
             html_excerpt = r.text if len(r.text) <= 12000 else r.text[:12000] + "… [truncated]"
             content_text = soup.get_text(" ", strip=True)
             results.append({
-                "URL": url, "Status": status_code, "Crawl Status": "Success",
+                "URL": url, "Status": str(status_code), "Crawl Status": "Success",
                 "Title": title, "Title Length": len(title),
                 "Description": desc, "Description Length": len(desc),
                 "H1": h1, "H Tags": json.dumps(h_tags, ensure_ascii=False),
@@ -655,7 +655,7 @@ with st.sidebar:
     )
 
     st.markdown("---")
-    run_button = st.button("🚀 Start Crawl", key="start", use_container_width=True)
+    run_button = st.button("🚀 Start Crawl", key="start", width="stretch")
 
 status_area = st.empty()
 progress_bar = st.progress(0.0)
@@ -680,7 +680,7 @@ if st.session_state.active_page == "content_analyzer":
     )
     source_name = st.text_input("Source label", value="Content")
     target_keyword = st.text_input("Target keyword", value="")
-    if st.button("Analyze content", use_container_width=True):
+    if st.button("Analyze content", width="stretch"):
         render_streamlit_content_analyzer_ui(st, content_input, source_name=source_name, target_keyword=target_keyword)
     else:
         render_streamlit_content_analyzer_ui(st, content_input, source_name=source_name, target_keyword=target_keyword)
@@ -762,7 +762,7 @@ if st.session_state.crawl_results is not None:
                 key="mime_filter"
             )
             df_filtered = df_display[df_display["MIME Type"].isin(selected_mime)]
-            st.dataframe(df_filtered, use_container_width=True, height=400)
+            st.dataframe(df_filtered, width="stretch", height=400)
         
         with tab2:
             content_types = df_display["Content Type"].dropna().unique()
@@ -772,7 +772,7 @@ if st.session_state.crawl_results is not None:
                 key="content_type_filter"
             )
             df_content = df_display[df_display["Content Type"] == selected_type]
-            st.dataframe(df_content, use_container_width=True, height=400)
+            st.dataframe(df_content, width="stretch", height=400)
             st.caption(f"Showing {len(df_content)} pages of type '{selected_type}'")
         
         with tab3:
@@ -783,7 +783,7 @@ if st.session_state.crawl_results is not None:
                 key="status_filter"
             )
             df_status = df_display[df_display["Crawl Status"] == selected_status]
-            st.dataframe(df_status, use_container_width=True, height=400)
+            st.dataframe(df_status, width="stretch", height=400)
             st.caption(f"Showing {len(df_status)} pages with status '{selected_status}'")
 
         # Charts
@@ -833,7 +833,7 @@ if st.session_state.crawl_results is not None:
         with col1:
             st.markdown("**Duplicate Titles**")
             if not dup_titles.empty:
-                st.dataframe(dup_titles[["URL", "Title"]], height=220, use_container_width=True)
+                st.dataframe(dup_titles[["URL", "Title"]], height=220, width="stretch")
                 st.metric("Count", len(dup_titles))
             else:
                 st.success("None ✅")
@@ -842,7 +842,7 @@ if st.session_state.crawl_results is not None:
         with col2:
             st.markdown("**Duplicate Descriptions**")
             if not dup_desc.empty:
-                st.dataframe(dup_desc[["URL", "Description"]], height=220, use_container_width=True)
+                st.dataframe(dup_desc[["URL", "Description"]], height=220, width="stretch")
                 st.metric("Count", len(dup_desc))
             else:
                 st.success("None ✅")
@@ -851,7 +851,7 @@ if st.session_state.crawl_results is not None:
         with col3:
             st.markdown("**Duplicate H1s**")
             if not dup_h1.empty:
-                st.dataframe(dup_h1[["URL", "H1"]], height=220, use_container_width=True)
+                st.dataframe(dup_h1[["URL", "H1"]], height=220, width="stretch")
                 st.metric("Count", len(dup_h1))
             else:
                 st.success("None ✅")
@@ -934,7 +934,7 @@ if st.session_state.crawl_results is not None:
                 data=towrite.getvalue(),
                 file_name="seo_crawl_report.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
+                width="stretch"
             )
         with col2:
             csv_data = df_filtered.to_csv(index=False)
@@ -943,7 +943,7 @@ if st.session_state.crawl_results is not None:
                 data=csv_data,
                 file_name="seo_crawl_results.csv",
                 mime="text/csv",
-                use_container_width=True
+                width="stretch"
             )
 
         st.markdown("---")

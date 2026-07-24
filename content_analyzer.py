@@ -140,7 +140,7 @@ def render_streamlit_content_analyzer_ui(st, content: str, source_name: str = "C
                     "Term": [item["term"] for item in analysis["top_keywords"]],
                     "Count": [item["count"] for item in analysis["top_keywords"]],
                 },
-                use_container_width=True,
+                width="stretch",
             )
         else:
             st.info("No keyword terms found.")

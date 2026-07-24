@@ -134,13 +134,13 @@ def render_streamlit_site_audit_ui(st, df: pd.DataFrame):
     if audit["quick_wins"].empty:
         st.success("No major site-wide issues detected in this pass.")
     else:
-        st.dataframe(audit["quick_wins"], use_container_width=True)
+        st.dataframe(audit["quick_wins"], width="stretch")
 
     st.markdown("---")
     tab1, tab2, tab3 = st.tabs(["Duplicate Titles", "Duplicate Descriptions", "Orphan Pages"])
     with tab1:
-        st.dataframe(audit["duplicate_titles"], use_container_width=True)
+        st.dataframe(audit["duplicate_titles"], width="stretch")
     with tab2:
-        st.dataframe(audit["duplicate_descriptions"], use_container_width=True)
+        st.dataframe(audit["duplicate_descriptions"], width="stretch")
     with tab3:
-        st.dataframe(audit["orphan_pages"], use_container_width=True)
+        st.dataframe(audit["orphan_pages"], width="stretch")

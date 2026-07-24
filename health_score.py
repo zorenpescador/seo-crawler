@@ -2259,13 +2259,13 @@ def render_streamlit_health_score_ui(st, df: pd.DataFrame, site_ctx: Dict[str, A
         st.caption(
             "This score is derived from the WEM-style weighted model: category-level penalties are averaged and then combined into one overall health score."
         )
-        st.dataframe(report["category_scores"], use_container_width=True)
+        st.dataframe(report["category_scores"], width="stretch")
 
     with health_tab2:
         if report["quick_wins"].empty:
             st.success("No quick wins detected in this crawl pass.")
         else:
-            st.dataframe(report["quick_wins"], use_container_width=True)
+            st.dataframe(report["quick_wins"], width="stretch")
 
     with health_tab3:
-        st.dataframe(report["checks"], use_container_width=True)
+        st.dataframe(report["checks"], width="stretch")

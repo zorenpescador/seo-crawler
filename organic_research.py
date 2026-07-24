@@ -257,7 +257,7 @@ def render_streamlit_organic_ui(st, df: pd.DataFrame, html_col: str = "HTML"):
             st.markdown("**Top Suggested Keywords (TF-IDF)**")
             if row["keywords"]:
                 kw_table = _pd.DataFrame(row["keywords"])
-                st.dataframe(kw_table, use_container_width=True)
+                st.dataframe(kw_table, width="stretch")
                 st.caption(f"Search Intent: **{row.get('top_term_intent', 'unknown').title()}**")
             else:
                 st.info("ℹ️ No candidate keywords found for this page.")
@@ -301,7 +301,7 @@ def render_streamlit_organic_ui(st, df: pd.DataFrame, html_col: str = "HTML"):
                 intent_dist = analyzed["top_term_intent"].value_counts()
                 st.metric("Most Common Intent", intent_dist.index[0].title() if len(intent_dist) > 0 else "Unknown")
             
-            st.dataframe(agg_df, use_container_width=True, height=400)
+            st.dataframe(agg_df, width="stretch", height=400)
         else:
             st.warning("⚠️ No keywords found in the current corpus.")
 
@@ -324,7 +324,7 @@ def render_streamlit_organic_ui(st, df: pd.DataFrame, html_col: str = "HTML"):
                     data=csv,
                     file_name="organic_suggestions.csv",
                     mime="text/csv",
-                    use_container_width=True
+                    width="stretch"
                 )
             
             with col2:
@@ -354,11 +354,11 @@ def render_streamlit_organic_ui(st, df: pd.DataFrame, html_col: str = "HTML"):
                     data=towrite.getvalue(),
                     file_name="organic_research_detailed.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
+                    width="stretch"
                 )
             
             # Preview table
             st.markdown("**Preview**")
-            st.dataframe(export_df.head(10), use_container_width=True)
+            st.dataframe(export_df.head(10), width="stretch")
         else:
             st.warning("⚠️ No analysis data available to export.")
