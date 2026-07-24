@@ -21,8 +21,8 @@ from checks.international import (
     check_C103, check_C104, check_C105, check_C106, check_C107,
 )
 from checks.links import (
-    check_C082, check_C086, check_C088, check_C089, check_C090, check_C092, check_C093,
-    check_C094, check_C095,
+    check_C081, check_C082, check_C083, check_C084, check_C085, check_C086, check_C087,
+    check_C088, check_C089, check_C090, check_C091, check_C092, check_C093, check_C094, check_C095,
 )
 from checks.markup import check_C109, check_C110, check_C111, check_C113, check_C116
 from checks.mobile import check_C129, check_C131, check_C132, check_C134
@@ -607,6 +607,36 @@ FALLBACK_CHECK_CATALOG = {
         "severity": "Notice",
         "notes": "The response has no Cache-Control header.",
     },
+    "Broken External Link": {
+        "category": "Links",
+        "severity": "Warning",
+        "notes": "Pages link to an external URL that returns a 4XX/5XX status.",
+    },
+    "External Link Redirect Chain": {
+        "category": "Links",
+        "severity": "Notice",
+        "notes": "Pages link to an external URL that redirects before resolving.",
+    },
+    "External Resource Blocked By Robots": {
+        "category": "Links",
+        "severity": "Notice",
+        "notes": "Pages link to an external resource disallowed by that domain's robots.txt.",
+    },
+    "Broken Image Source": {
+        "category": "Links",
+        "severity": "Error",
+        "notes": "An <img src> fails to load (4XX/5XX).",
+    },
+    "Broken Favicon": {
+        "category": "Links",
+        "severity": "Notice",
+        "notes": "The site's favicon returns a 4XX/5XX status.",
+    },
+    "Repeated Dead Outbound Link": {
+        "category": "Links",
+        "severity": "Warning",
+        "notes": "The same broken external link is referenced by 3+ crawled pages (likely a site-wide template link).",
+    },
     "Thin Content": {
         "category": "On-Page & Duplicates",
         "severity": "Warning",
@@ -756,6 +786,12 @@ CHECK_NAME_TO_CATALOG_ID = {
     "Content Language Mismatch": "C107",
     "Uncompressed HTML Response": "C119",
     "Missing Caching Headers": "C128",
+    "Broken External Link": "C081",
+    "External Link Redirect Chain": "C083",
+    "External Resource Blocked By Robots": "C084",
+    "Broken Image Source": "C085",
+    "Broken Favicon": "C087",
+    "Repeated Dead Outbound Link": "C091",
     "Thin Content": "C053",
     "Low Internal Link Support": "C076",
     "Missing Schema": "C108",
@@ -1026,6 +1062,12 @@ def build_site_health_report(df: pd.DataFrame, site_ctx: Dict[str, Any] = None) 
     content_language_mismatch = check_C107(work_df)
     uncompressed_html_response = check_C119(work_df)
     missing_caching_headers = check_C128(work_df)
+    broken_external_link = check_C081(work_df, site_ctx=site_ctx)
+    external_link_redirect_chain = check_C083(work_df, site_ctx=site_ctx)
+    external_resource_blocked_by_robots = check_C084(work_df, site_ctx=site_ctx)
+    broken_image_source = check_C085(work_df, site_ctx=site_ctx)
+    broken_favicon = check_C087(work_df, site_ctx=site_ctx)
+    repeated_dead_outbound_link = check_C091(work_df, site_ctx=site_ctx)
     non_https_pages = work_df[~work_df["URL"].astype(str).str.startswith("https://")][["URL"]].drop_duplicates().reset_index(drop=True)
     redirect_pages = work_df[work_df["Status"].astype(str).str.startswith(("301", "302", "303", "307", "308"))][["URL"]].drop_duplicates().reset_index(drop=True)
     missing_schema = work_df[work_df["Schema"].astype(str).str.strip().eq("")][["URL"]].drop_duplicates().reset_index(drop=True)
@@ -2068,6 +2110,60 @@ def build_site_health_report(df: pd.DataFrame, site_ctx: Dict[str, Any] = None) 
         affected_pages=len(missing_caching_headers),
         total_pages=total_pages,
         notes=_catalog_reference("Missing Caching Headers")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Broken External Link")["category"],
+        check="Broken External Link",
+        severity=_catalog_reference("Broken External Link")["severity"],
+        affected_pages=len(broken_external_link),
+        total_pages=total_pages,
+        notes=_catalog_reference("Broken External Link")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("External Link Redirect Chain")["category"],
+        check="External Link Redirect Chain",
+        severity=_catalog_reference("External Link Redirect Chain")["severity"],
+        affected_pages=len(external_link_redirect_chain),
+        total_pages=total_pages,
+        notes=_catalog_reference("External Link Redirect Chain")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("External Resource Blocked By Robots")["category"],
+        check="External Resource Blocked By Robots",
+        severity=_catalog_reference("External Resource Blocked By Robots")["severity"],
+        affected_pages=len(external_resource_blocked_by_robots),
+        total_pages=total_pages,
+        notes=_catalog_reference("External Resource Blocked By Robots")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Broken Image Source")["category"],
+        check="Broken Image Source",
+        severity=_catalog_reference("Broken Image Source")["severity"],
+        affected_pages=len(broken_image_source),
+        total_pages=total_pages,
+        notes=_catalog_reference("Broken Image Source")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Broken Favicon")["category"],
+        check="Broken Favicon",
+        severity=_catalog_reference("Broken Favicon")["severity"],
+        affected_pages=len(broken_favicon),
+        total_pages=total_pages,
+        notes=_catalog_reference("Broken Favicon")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Repeated Dead Outbound Link")["category"],
+        check="Repeated Dead Outbound Link",
+        severity=_catalog_reference("Repeated Dead Outbound Link")["severity"],
+        affected_pages=len(repeated_dead_outbound_link),
+        total_pages=total_pages,
+        notes=_catalog_reference("Repeated Dead Outbound Link")["notes"],
     )
     _add_finding(
         findings,

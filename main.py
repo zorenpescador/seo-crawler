@@ -23,6 +23,9 @@ from content_analyzer import render_streamlit_content_analyzer_ui
 # Helper utilities
 # ---------------------------
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; SEO-Crawler/1.0; +https://example.com)"}
+EXTERNAL_CHECK_MAX_LINKS = 50
+EXTERNAL_CHECK_MAX_IMAGES = 30
+EXTERNAL_CHECK_TIMEOUT = 6
 
 def load_robots_for_domain(domain):
     rp = RobotFileParser()
@@ -163,6 +166,73 @@ def fetch_site_context(base, session):
 
     return site_ctx
 
+def _probe_url(session, url, timeout=EXTERNAL_CHECK_TIMEOUT):
+    """HEAD-probe a URL (falling back to GET for servers that reject HEAD).
+    Returns (status_code_or_None, redirected_bool). None means the request
+    failed outright (timeout/DNS/connection error), not an HTTP error."""
+    try:
+        r = session.head(url, timeout=timeout, allow_redirects=True)
+        if r.status_code in (405, 501) or r.status_code >= 400:
+            r = session.get(url, timeout=timeout, allow_redirects=True, stream=True)
+            r.close()
+        return r.status_code, len(r.history) > 0
+    except Exception:
+        return None, False
+
+def _is_blocked_by_external_robots(url, robots_cache):
+    parsed = urlparse(url)
+    domain = f"{parsed.scheme}://{parsed.netloc}"
+    if domain not in robots_cache:
+        rp, _ = load_robots_for_domain(domain)
+        robots_cache[domain] = rp
+    rp = robots_cache[domain]
+    if rp is None:
+        return False
+    try:
+        return not rp.can_fetch("*", url)
+    except Exception:
+        return False
+
+def check_external_resources(session, link_urls, image_urls, favicon_candidates, base):
+    """Probe external links, images, and the favicon once per crawl (opt-in,
+    since it makes requests to third-party domains beyond the site being
+    audited). Capped and deduplicated to keep this bounded and polite."""
+    result = {
+        "external_link_status": {},
+        "external_link_redirected": {},
+        "external_link_robots_blocked": {},
+        "external_links_truncated": False,
+        "image_status": {},
+        "images_truncated": False,
+        "favicon_url": None,
+        "favicon_status": None,
+    }
+    robots_cache = {}
+
+    link_list = sorted(link_urls)
+    if len(link_list) > EXTERNAL_CHECK_MAX_LINKS:
+        result["external_links_truncated"] = True
+        link_list = link_list[:EXTERNAL_CHECK_MAX_LINKS]
+    for url in link_list:
+        status, redirected = _probe_url(session, url)
+        result["external_link_status"][url] = status
+        result["external_link_redirected"][url] = redirected
+        result["external_link_robots_blocked"][url] = _is_blocked_by_external_robots(url, robots_cache)
+
+    image_list = sorted(image_urls)
+    if len(image_list) > EXTERNAL_CHECK_MAX_IMAGES:
+        result["images_truncated"] = True
+        image_list = image_list[:EXTERNAL_CHECK_MAX_IMAGES]
+    for url in image_list:
+        status, _ = _probe_url(session, url)
+        result["image_status"][url] = status
+
+    favicon_url = favicon_candidates[0] if favicon_candidates else f"{base}/favicon.ico"
+    result["favicon_url"] = favicon_url
+    result["favicon_status"], _ = _probe_url(session, favicon_url)
+
+    return result
+
 def extract_schema_types(soup):
     schema_types = []
     for tag in soup.find_all("script", type="application/ld+json"):
@@ -248,7 +318,7 @@ def ensure_result_columns(df):
 # ---------------------------
 # Core crawler
 # ---------------------------
-def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_progress_cb=None):
+def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_progress_cb=None, check_external_links=False):
     seed_url = seed_url.rstrip('/')
     parsed_seed = urlparse(seed_url)
     seed_domain = parsed_seed.netloc
@@ -258,6 +328,9 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
     visited = set()
     to_visit = [seed_url]
     results = []
+    external_link_urls = set()
+    image_urls = set()
+    favicon_candidates = []
 
     session = requests.Session()
     session.headers.update(HEADERS)
@@ -344,6 +417,18 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
             total_links = len(internal_links) + len(external_links)
             link_to_word = round(total_links / word_count, 3) if word_count else 0
 
+            if check_external_links:
+                external_link_urls.update(external_links)
+                for img in soup.find_all("img", src=True):
+                    img_src = normalize_url(urljoin(url, img.get("src")))
+                    if img_src:
+                        image_urls.add(img_src)
+                for link_tag in soup.find_all("link", rel=True):
+                    rel = link_tag.get("rel")
+                    rel_str = " ".join(rel) if isinstance(rel, list) else str(rel)
+                    if "icon" in rel_str.lower() and link_tag.get("href"):
+                        favicon_candidates.append(normalize_url(urljoin(url, link_tag.get("href"))))
+
             schema = extract_schema_types(soup)
             content_type = detect_content_type(url, soup)
             mime_type = r.headers.get("Content-Type", "")
@@ -394,6 +479,9 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
             visited.add(url)
             time.sleep(delay)
             continue
+
+    if check_external_links:
+        site_ctx.update(check_external_resources(session, external_link_urls, image_urls, favicon_candidates, base))
 
     return pd.DataFrame(results), {"blocked": False, "site_ctx": site_ctx}
 
@@ -557,7 +645,15 @@ with st.sidebar:
         value=False,
         help="⚠️ Testing only - respects site's crawling rules by default"
     )
-    
+
+    check_external_links = st.checkbox(
+        "🔗 Check external links (slower)",
+        value=False,
+        help="Also probes external links, images, and the favicon for broken/redirecting "
+             "resources. Makes extra requests to third-party domains after the main crawl, "
+             "so it's off by default and capped at 50 links / 30 images."
+    )
+
     st.markdown("---")
     run_button = st.button("🚀 Start Crawl", key="start", use_container_width=True)
 
@@ -602,7 +698,7 @@ if run_button:
             status_text.markdown(f"⏳ **{message}**")
 
         status_area.info("🔍 Preparing to crawl...")
-        df, meta = crawl_site(seed_url, max_pages=max_pages, delay=delay, ignore_robots=ignore_robots, show_progress_cb=show_progress)
+        df, meta = crawl_site(seed_url, max_pages=max_pages, delay=delay, ignore_robots=ignore_robots, show_progress_cb=show_progress, check_external_links=check_external_links)
         
         # Store results in session state for persistence across reruns
         st.session_state.crawl_results = df

@@ -2,18 +2,53 @@
 
 See checks/crawlability.py for the pattern these stubs follow.
 """
-from typing import Any, Dict
-from urllib.parse import urlparse
+from collections import Counter
+from typing import Any, Dict, List
+from urllib.parse import urljoin, urlparse
 
 import pandas as pd
 from bs4 import BeautifulSoup
 
+SKIPPED_HREF_PREFIXES = ("javascript:", "mailto:", "tel:", "#")
 
-def check_C081(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+
+def _external_links(html: Any, page_url: Any) -> List[str]:
+    if not html:
+        return []
+    own_domain = urlparse(str(page_url)).netloc.lower()
+    soup = BeautifulSoup(str(html), "html.parser")
+    links = []
+    for a in soup.find_all("a", href=True):
+        href = a["href"].strip()
+        if not href or href.startswith(SKIPPED_HREF_PREFIXES):
+            continue
+        absolute = urljoin(str(page_url), href)
+        parsed = urlparse(absolute)
+        if parsed.netloc and parsed.netloc.lower() != own_domain:
+            links.append(absolute)
+    return links
+
+
+def check_C081(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """broken external link (4XX/5XX) (Warning · Page)
-    Optional: requires --check-external-links flag (slower).
+    Optional: requires the "Check external links" option to be enabled
+    during crawl. Without it, site_ctx has no external-link probe data
+    and this check finds nothing.
     """
-    raise NotImplementedError("C081 not yet implemented")
+    site_ctx = site_ctx or {}
+    status_map = site_ctx.get("external_link_status") or {}
+    if not status_map:
+        return pages_df.iloc[0:0][["URL"]]
+
+    def _has_broken_external_link(row: pd.Series) -> bool:
+        for link in _external_links(row.get("HTML"), row.get("URL")):
+            status = status_map.get(link)
+            if status is not None and status >= 400:
+                return True
+        return False
+
+    mask = pages_df.apply(_has_broken_external_link, axis=1)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def _has_insecure_external_link(html: Any, page_url: Any) -> bool:
@@ -34,21 +69,65 @@ def check_C082(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C083(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """external link redirect chain (Notice · Page)"""
-    raise NotImplementedError("C083 not yet implemented")
-
-
-def check_C084(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """link to a disallowed/blocked-by-robots external resource (Notice · Page)"""
-    raise NotImplementedError("C084 not yet implemented")
-
-
-def check_C085(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """broken image source (4XX/5XX) (Error · Page)
-    <img src> fails to load.
+def check_C083(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """external link redirect chain (Notice · Page)
+    Requires the "Check external links" option to be enabled during crawl.
     """
-    raise NotImplementedError("C085 not yet implemented")
+    site_ctx = site_ctx or {}
+    redirected_map = site_ctx.get("external_link_redirected") or {}
+    if not redirected_map:
+        return pages_df.iloc[0:0][["URL"]]
+
+    def _has_redirecting_external_link(row: pd.Series) -> bool:
+        return any(redirected_map.get(link) for link in _external_links(row.get("HTML"), row.get("URL")))
+
+    mask = pages_df.apply(_has_redirecting_external_link, axis=1)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
+
+
+def check_C084(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """link to a disallowed/blocked-by-robots external resource (Notice · Page)
+    Requires the "Check external links" option to be enabled during crawl.
+    """
+    site_ctx = site_ctx or {}
+    blocked_map = site_ctx.get("external_link_robots_blocked") or {}
+    if not blocked_map:
+        return pages_df.iloc[0:0][["URL"]]
+
+    def _links_to_blocked(row: pd.Series) -> bool:
+        return any(blocked_map.get(link) for link in _external_links(row.get("HTML"), row.get("URL")))
+
+    mask = pages_df.apply(_links_to_blocked, axis=1)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
+
+
+def _image_urls(html: Any, page_url: Any) -> List[str]:
+    if not html:
+        return []
+    soup = BeautifulSoup(str(html), "html.parser")
+    return [urljoin(str(page_url), img["src"].strip()) for img in soup.find_all("img", src=True) if img["src"].strip()]
+
+
+def check_C085(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """broken image source (4XX/5XX) (Error · Page)
+    <img src> fails to load. Requires the "Check external links" option
+    to be enabled during crawl (it probes all images, not just external
+    ones, despite the option's name).
+    """
+    site_ctx = site_ctx or {}
+    status_map = site_ctx.get("image_status") or {}
+    if not status_map:
+        return pages_df.iloc[0:0][["URL"]]
+
+    def _has_broken_image(row: pd.Series) -> bool:
+        for img_url in _image_urls(row.get("HTML"), row.get("URL")):
+            status = status_map.get(img_url)
+            if status is not None and status >= 400:
+                return True
+        return False
+
+    mask = pages_df.apply(_has_broken_image, axis=1)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def _has_offsite_image(html: Any, page_url: Any) -> bool:
@@ -72,9 +151,15 @@ def check_C086(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C087(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """broken favicon (Notice · Site)"""
-    raise NotImplementedError("C087 not yet implemented")
+def check_C087(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """broken favicon (Notice · Site)
+    Requires the "Check external links" option to be enabled during crawl.
+    """
+    site_ctx = site_ctx or {}
+    status = site_ctx.get("favicon_status")
+    if status is not None and status >= 400:
+        return pages_df[["URL"]].drop_duplicates().reset_index(drop=True)
+    return pages_df.iloc[0:0][["URL"]]
 
 
 def check_C088(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
@@ -144,11 +229,41 @@ def check_C090(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C091(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+DEAD_LINK_MIN_REFERRING_PAGES = 3
+
+
+def check_C091(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """dead outbound link in footer/nav (site-wide template) (Warning · Site)
-    Same broken link repeated across many pages.
+    Same broken link repeated across many pages. Heuristic: a broken
+    external link referenced by 3+ crawled pages, as a proxy for a
+    site-wide template link (footer/nav specifically isn't distinguished
+    from other page regions). Requires "Check external links" to be
+    enabled during crawl.
     """
-    raise NotImplementedError("C091 not yet implemented")
+    site_ctx = site_ctx or {}
+    status_map = site_ctx.get("external_link_status") or {}
+    broken_links = {url for url, status in status_map.items() if status is not None and status >= 400}
+    if not broken_links:
+        return pages_df.iloc[0:0][["URL"]]
+
+    referrer_count = Counter()
+    referrers_by_link = {}
+    for _, row in pages_df.iterrows():
+        page_url = str(row["URL"])
+        for link in _external_links(row.get("HTML"), row.get("URL")):
+            if link in broken_links:
+                referrer_count[link] += 1
+                referrers_by_link.setdefault(link, set()).add(page_url)
+
+    repeated_links = {link for link, count in referrer_count.items() if count >= DEAD_LINK_MIN_REFERRING_PAGES}
+    if not repeated_links:
+        return pages_df.iloc[0:0][["URL"]]
+
+    affected_pages = set()
+    for link in repeated_links:
+        affected_pages.update(referrers_by_link[link])
+
+    return pages_df[pages_df["URL"].astype(str).isin(affected_pages)][["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 OUTBOUND_LINKS_PER_WORD_MAX = 0.02
@@ -255,11 +370,4 @@ def check_C095(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-CHECKS = {
-    "C081": check_C081,
-    "C083": check_C083,
-    "C084": check_C084,
-    "C085": check_C085,
-    "C087": check_C087,
-    "C091": check_C091,
-}
+CHECKS = {}
