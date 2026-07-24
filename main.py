@@ -158,9 +158,28 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
 
         try:
             start_time = time.time()
-            r = session.get(url, timeout=12)
+            r = session.get(url, timeout=12, allow_redirects=False)
             crawl_time = round(time.time() - start_time, 2)  # seconds
             status_code = r.status_code
+
+            if 300 <= status_code < 400:
+                redirect_target = normalize_url(urljoin(url, r.headers.get("Location", "")))
+                results.append({
+                    "URL": url, "Status": status_code, "Crawl Status": "Redirect",
+                    "Title": "", "Title Length": 0, "Description": "", "Description Length": 0,
+                    "H1": "", "H Tags": "", "Word Count": 0, "Heading Count": 0, "Image Count": 0,
+                    "Internal Links": 0, "External Links": 0, "Link-to-Word Ratio": 0,
+                    "Schema": "", "Content Type": "", "MIME Type": r.headers.get("Content-Type", ""),
+                    "Canonical URL": "", "OG Title": "", "OG Description": "", "Crawl Time (s)": crawl_time,
+                    "HTML": "", "Content Text": "", "Redirect Target": redirect_target
+                })
+                visited.add(url)
+                if redirect_target and redirect_target not in visited and redirect_target not in to_visit:
+                    p = urlparse(redirect_target)
+                    if p.scheme in ("http", "https"):
+                        to_visit.append(redirect_target)
+                time.sleep(delay)
+                continue
 
             if status_code >= 400:
                 results.append({
