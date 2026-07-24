@@ -65,11 +65,24 @@ def check_C126(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C126 not yet implemented")
 
 
-def check_C127(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+DOM_SIZE_MAX_NODES = 1500
+
+
+def _tag_count(html: Any) -> int:
+    if not html:
+        return 0
+    soup = BeautifulSoup(str(html), "html.parser")
+    return len(soup.find_all(True))
+
+
+def check_C127(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """excessive DOM size (Notice · Page)
-    >1500 nodes, approximated via tag count.
+    >1500 nodes, approximated via tag count. Pages beyond the crawler's
+    12,000-character HTML excerpt will undercount, same caveat as the
+    other HTML-derived checks in this package.
     """
-    raise NotImplementedError("C127 not yet implemented")
+    counts = pages_df["HTML"].fillna("").apply(_tag_count)
+    return pages_df.loc[counts.gt(DOM_SIZE_MAX_NODES), ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C128(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -87,6 +100,5 @@ CHECKS = {
     "C124": check_C124,
     "C125": check_C125,
     "C126": check_C126,
-    "C127": check_C127,
     "C128": check_C128,
 }
