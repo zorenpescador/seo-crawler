@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 import pandas as pd
 from bs4 import BeautifulSoup
 
-from checks.markup import check_C113, check_C116
+from checks.markup import check_C109, check_C113, check_C116
 from checks.on_page import check_C042, check_C043, check_C046, check_C047, check_C050, check_C052, check_C058, check_C059, check_C061, check_C062, check_C064, check_C065
 
 
@@ -169,6 +169,11 @@ FALLBACK_CHECK_CATALOG = {
         "severity": "Notice",
         "notes": "Pages are missing a twitter:card meta tag.",
     },
+    "Invalid Structured Data": {
+        "category": "Markup & Structured Data",
+        "severity": "Error",
+        "notes": "Pages have a JSON-LD script block that fails to parse.",
+    },
     "Thin Content": {
         "category": "On-Page & Duplicates",
         "severity": "Warning",
@@ -235,6 +240,7 @@ CHECK_NAME_TO_CATALOG_ID = {
     "Low Text-to-HTML Ratio": "C058",
     "Missing Favicon Link": "C116",
     "Missing Twitter Card Tags": "C113",
+    "Invalid Structured Data": "C109",
     "Thin Content": "C053",
     "Low Internal Link Support": "C076",
     "Missing Schema": "C108",
@@ -436,6 +442,7 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
     pages_missing_alt = _missing_alt_image_pages(work_df.set_index("URL")["HTML"])
     missing_favicon = check_C116(work_df)
     missing_twitter_card = check_C113(work_df)
+    invalid_structured_data = check_C109(work_df)
 
     internal_link_counts: Counter = Counter()
     for html in work_df.get("HTML", pd.Series([""] * len(work_df))).fillna(""):
@@ -707,6 +714,15 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
         affected_pages=len(missing_twitter_card),
         total_pages=total_pages,
         notes=_catalog_reference("Missing Twitter Card Tags")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Invalid Structured Data")["category"],
+        check="Invalid Structured Data",
+        severity=_catalog_reference("Invalid Structured Data")["severity"],
+        affected_pages=len(invalid_structured_data),
+        total_pages=total_pages,
+        notes=_catalog_reference("Invalid Structured Data")["notes"],
     )
     _add_finding(
         findings,

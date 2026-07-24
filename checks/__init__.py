@@ -1,14 +1,15 @@
 """Registry of stubbed checks_catalog.csv checks awaiting implementation.
 
-health_score.py implements 32 checks directly (see CHECK_NAME_TO_CATALOG_ID
+health_score.py implements 33 checks directly (see CHECK_NAME_TO_CATALOG_ID
 there, including the title/description length, multiple-H1, missing
 html-lang, H1-duplicates-title, URL-too-long, URL-contains-uppercase,
 URL-contains-underscores, URL-excessive-parameters, and low-text-to-html-
-ratio checks in checks/on_page.py, plus the missing-favicon-link and
-missing-twitter-card checks in checks/markup.py) plus the aggregate
-score/category-scores/quick-wins rows (C136, C137, C139). The remaining
-103 checks in checks_catalog.csv have a placeholder function here,
-grouped by category into one module per file.
+ratio checks in checks/on_page.py, plus the missing-favicon-link,
+missing-twitter-card, and invalid-structured-data checks in
+checks/markup.py) plus the aggregate score/category-scores/quick-wins
+rows (C136, C137, C139). The remaining 102 checks in checks_catalog.csv
+have a placeholder function here, grouped by category into one module
+per file.
 
 Each stub has the signature (pages_df, site_ctx) -> None and raises
 NotImplementedError. site_ctx is a placeholder for site-level data the

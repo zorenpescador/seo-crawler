@@ -4,17 +4,36 @@ health_score.py already implements missing-schema, missing Open Graph tags,
 and missing viewport meta. These stubs cover the rest of the category. See
 checks/crawlability.py for the pattern.
 """
+import json
 from typing import Any, Dict
 
 import pandas as pd
 from bs4 import BeautifulSoup
 
 
-def check_C109(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def _has_invalid_jsonld(html: Any) -> bool:
+    if not html:
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        content = script.string or script.get_text()
+        if not content or not content.strip():
+            continue
+        try:
+            json.loads(content)
+        except ValueError:
+            return True
+    return False
+
+
+def check_C109(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """structured data has invalid/malformed JSON-LD (Error · Page)
-    JSON parse failure.
+    JSON parse failure. Only flags pages that have a JSON-LD block and it
+    fails to parse; pages with no structured data at all are covered by
+    Missing Schema (C108).
     """
-    raise NotImplementedError("C109 not yet implemented")
+    mask = pages_df["HTML"].fillna("").apply(_has_invalid_jsonld)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C110(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -77,7 +96,6 @@ def check_C116(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
 
 
 CHECKS = {
-    "C109": check_C109,
     "C110": check_C110,
     "C111": check_C111,
     "C114": check_C114,
