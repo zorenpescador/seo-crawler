@@ -8,6 +8,7 @@ import pandas as pd
 from bs4 import BeautifulSoup
 
 from checks.markup import check_C109, check_C113, check_C116
+from checks.performance import check_C123
 from checks.on_page import check_C042, check_C043, check_C046, check_C047, check_C050, check_C052, check_C058, check_C059, check_C061, check_C062, check_C064, check_C065
 
 
@@ -174,6 +175,11 @@ FALLBACK_CHECK_CATALOG = {
         "severity": "Error",
         "notes": "Pages have a JSON-LD script block that fails to parse.",
     },
+    "Images Missing Dimensions": {
+        "category": "Site Performance",
+        "severity": "Warning",
+        "notes": "Images are missing explicit width/height attributes (layout shift risk).",
+    },
     "Thin Content": {
         "category": "On-Page & Duplicates",
         "severity": "Warning",
@@ -241,6 +247,7 @@ CHECK_NAME_TO_CATALOG_ID = {
     "Missing Favicon Link": "C116",
     "Missing Twitter Card Tags": "C113",
     "Invalid Structured Data": "C109",
+    "Images Missing Dimensions": "C123",
     "Thin Content": "C053",
     "Low Internal Link Support": "C076",
     "Missing Schema": "C108",
@@ -428,6 +435,7 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
     low_text_ratio = check_C058(work_df)
     thin_content = work_df[work_df["Word Count"].astype(int) < 300][["URL"]].drop_duplicates().reset_index(drop=True)
     slow_pages = work_df[work_df["Crawl Time (s)"].astype(float) > 2.5][["URL"]].drop_duplicates().reset_index(drop=True)
+    images_missing_dimensions = check_C123(work_df)
     non_https_pages = work_df[~work_df["URL"].astype(str).str.startswith("https://")][["URL"]].drop_duplicates().reset_index(drop=True)
     redirect_pages = work_df[work_df["Status"].astype(str).str.startswith(("301", "302", "303", "307", "308"))][["URL"]].drop_duplicates().reset_index(drop=True)
     missing_schema = work_df[work_df["Schema"].astype(str).str.strip().eq("")][["URL"]].drop_duplicates().reset_index(drop=True)
@@ -732,6 +740,15 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
         affected_pages=len(slow_pages),
         total_pages=total_pages,
         notes=_catalog_reference("Slow Response Time")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Images Missing Dimensions")["category"],
+        check="Images Missing Dimensions",
+        severity=_catalog_reference("Images Missing Dimensions")["severity"],
+        affected_pages=len(images_missing_dimensions),
+        total_pages=total_pages,
+        notes=_catalog_reference("Images Missing Dimensions")["notes"],
     )
     _add_finding(
         findings,

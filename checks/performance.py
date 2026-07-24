@@ -6,6 +6,7 @@ the rest of the category. See checks/crawlability.py for the pattern.
 from typing import Any, Dict
 
 import pandas as pd
+from bs4 import BeautifulSoup
 
 
 def check_C119(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -34,9 +35,17 @@ def check_C122(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C122 not yet implemented")
 
 
-def check_C123(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def _has_image_missing_dimensions(html: Any) -> bool:
+    if not html:
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    return any(not img.get("width") or not img.get("height") for img in soup.find_all("img"))
+
+
+def check_C123(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """images without explicit width/height (layout shift risk) (Warning · Page)"""
-    raise NotImplementedError("C123 not yet implemented")
+    mask = pages_df["HTML"].fillna("").apply(_has_image_missing_dimensions)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C124(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -75,7 +84,6 @@ CHECKS = {
     "C120": check_C120,
     "C121": check_C121,
     "C122": check_C122,
-    "C123": check_C123,
     "C124": check_C124,
     "C125": check_C125,
     "C126": check_C126,
