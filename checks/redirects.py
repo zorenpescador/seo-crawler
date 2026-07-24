@@ -2,9 +2,12 @@
 
 See checks/crawlability.py for the pattern these stubs follow.
 """
+import re
 from typing import Any, Dict
+from urllib.parse import urlparse
 
 import pandas as pd
+from bs4 import BeautifulSoup
 
 
 def check_C032(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -35,25 +38,49 @@ def check_C035(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C035 not yet implemented")
 
 
-def check_C036(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def _has_meta_refresh(html: Any) -> bool:
+    if not html:
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    return bool(soup.find("meta", attrs={"http-equiv": re.compile("^refresh$", re.IGNORECASE)}))
+
+
+def check_C036(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """meta-refresh redirect used instead of HTTP redirect (Notice · Page)
     Non-standard client-side redirect pattern.
     """
-    raise NotImplementedError("C036 not yet implemented")
+    mask = pages_df["HTML"].fillna("").apply(_has_meta_refresh)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C037(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C037(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """trailing-slash and non-trailing-slash both resolve without redirect (duplicate URLs) (Warning · Site)
     Both variants return 200 instead of canonicalizing.
     """
-    raise NotImplementedError("C037 not yet implemented")
+    urls = set(pages_df["URL"].astype(str))
+    affected = set()
+    for url in urls:
+        if url.endswith("/"):
+            bare = url[:-1]
+            if bare in urls:
+                affected.add(url)
+                affected.add(bare)
+    return pages_df[pages_df["URL"].astype(str).isin(affected)][["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C038(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C038(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """www / non-www both resolve without redirect (Warning · Site)
     Host variants not canonicalized.
     """
-    raise NotImplementedError("C038 not yet implemented")
+    urls = list(pages_df["URL"].astype(str).unique())
+    netlocs = {urlparse(u).netloc.lower() for u in urls}
+    affected_netlocs = set()
+    for netloc in netlocs:
+        if netloc.startswith("www.") and netloc[4:] in netlocs:
+            affected_netlocs.add(netloc)
+            affected_netlocs.add(netloc[4:])
+    affected_urls = {u for u in urls if urlparse(u).netloc.lower() in affected_netlocs}
+    return pages_df[pages_df["URL"].astype(str).isin(affected_urls)][["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C039(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -75,9 +102,6 @@ CHECKS = {
     "C033": check_C033,
     "C034": check_C034,
     "C035": check_C035,
-    "C036": check_C036,
-    "C037": check_C037,
-    "C038": check_C038,
     "C039": check_C039,
     "C040": check_C040,
 }

@@ -77,9 +77,18 @@ def check_C087(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C087 not yet implemented")
 
 
-def check_C088(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """broken canonical target (canonical URL 4XX/5XX) (Error · Page)"""
-    raise NotImplementedError("C088 not yet implemented")
+def check_C088(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """broken canonical target (canonical URL 4XX/5XX) (Error · Page)
+    Only catches targets that are themselves in the crawled URL set.
+    """
+    status_map = dict(zip(pages_df["URL"].astype(str), pages_df["Status"].astype(str)))
+
+    def _is_broken(canonical: Any) -> bool:
+        status = status_map.get(str(canonical).strip())
+        return bool(status) and status.startswith(("4", "5"))
+
+    mask = pages_df["Canonical URL"].apply(_is_broken)
+    return pages_df.loc[mask, ["URL", "Canonical URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C089(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -101,9 +110,36 @@ def check_C091(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C091 not yet implemented")
 
 
-def check_C092(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """excessive outbound links relative to word count (Notice · Page)"""
-    raise NotImplementedError("C092 not yet implemented")
+OUTBOUND_LINKS_PER_WORD_MAX = 0.02
+OUTBOUND_LINK_COUNT_MIN = 5
+
+
+def _external_link_count(html: Any, page_url: Any) -> int:
+    if not html:
+        return 0
+    own_domain = urlparse(str(page_url)).netloc.lower()
+    soup = BeautifulSoup(str(html), "html.parser")
+    count = 0
+    for a in soup.find_all("a", href=True):
+        parsed = urlparse(a["href"])
+        if parsed.netloc and parsed.netloc.lower() != own_domain:
+            count += 1
+    return count
+
+
+def check_C092(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """excessive outbound links relative to word count (Notice · Page)
+    Heuristic: at least 5 outbound links, and more than 1 per 50 words.
+    """
+    def _is_excessive(row: pd.Series) -> bool:
+        word_count = int(row.get("Word Count") or 0)
+        if word_count <= 0:
+            return False
+        ext_count = _external_link_count(row.get("HTML"), row.get("URL"))
+        return ext_count >= OUTBOUND_LINK_COUNT_MIN and (ext_count / word_count) > OUTBOUND_LINKS_PER_WORD_MAX
+
+    mask = pages_df.apply(_is_excessive, axis=1)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C093(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -127,9 +163,24 @@ def check_C094(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C095(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """form action pointing to broken/insecure endpoint (Warning · Page)"""
-    raise NotImplementedError("C095 not yet implemented")
+def _has_insecure_form_action(html: Any, page_url: Any) -> bool:
+    if not html or not str(page_url).startswith("https://"):
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    for form in soup.find_all("form"):
+        action = form.get("action") or ""
+        if action.startswith("http://"):
+            return True
+    return False
+
+
+def check_C095(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """form action pointing to broken/insecure endpoint (Warning · Page)
+    Only checks the insecure (http:// action on an https page) case;
+    verifying "broken" would require an actual request to the endpoint.
+    """
+    mask = pages_df.apply(lambda row: _has_insecure_form_action(row.get("HTML"), row.get("URL")), axis=1)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 CHECKS = {
@@ -138,11 +189,8 @@ CHECKS = {
     "C084": check_C084,
     "C085": check_C085,
     "C087": check_C087,
-    "C088": check_C088,
     "C089": check_C089,
     "C090": check_C090,
     "C091": check_C091,
-    "C092": check_C092,
     "C093": check_C093,
-    "C095": check_C095,
 }

@@ -5,9 +5,28 @@ health_score.py / site_audit.py. Fill in the body and remove the
 NotImplementedError once real logic lands, then wire the check_id into
 health_score.CHECK_NAME_TO_CATALOG_ID so it feeds the health score.
 """
+import re
 from typing import Any, Dict
+from urllib.parse import urlparse
 
 import pandas as pd
+from bs4 import BeautifulSoup
+
+ROBOTS_META_NAME_PATTERN = re.compile("^robots$", re.IGNORECASE)
+SOFT_404_TEXT_PATTERN = re.compile(
+    r"\b(page not found|404 error|error 404|not found|doesn't exist|does not exist)\b", re.IGNORECASE
+)
+SOFT_404_WORD_COUNT_MAX = 200
+
+
+def _robots_meta_content(html: Any) -> str:
+    if not html:
+        return ""
+    soup = BeautifulSoup(str(html), "html.parser")
+    meta = soup.find("meta", attrs={"name": ROBOTS_META_NAME_PATTERN})
+    if not meta:
+        return ""
+    return str(meta.get("content", "")).lower()
 
 
 def check_C001(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -87,18 +106,21 @@ def check_C011(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C011 not yet implemented")
 
 
-def check_C012(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C012(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """page has noindex directive (Warning · Page)
-    meta robots or X-Robots-Tag contains noindex.
+    meta robots contains noindex. (X-Robots-Tag would need response
+    headers, which the crawler doesn't currently capture.)
     """
-    raise NotImplementedError("C012 not yet implemented")
+    mask = pages_df["HTML"].fillna("").apply(lambda html: "noindex" in _robots_meta_content(html))
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C013(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C013(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """page has nofollow on all outlinks (Warning · Page)
     meta robots nofollow prevents link equity flow.
     """
-    raise NotImplementedError("C013 not yet implemented")
+    mask = pages_df["HTML"].fillna("").apply(lambda html: "nofollow" in _robots_meta_content(html))
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C014(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -108,11 +130,21 @@ def check_C014(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C014 not yet implemented")
 
 
-def check_C015(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C015(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """page returns soft 404 (200 status, error-like content) (Warning · Page)
-    Heuristic: thin/empty body with 'not found' language but HTTP 200.
+    Heuristic: thin body (<200 words) with 'not found' language but HTTP 200.
     """
-    raise NotImplementedError("C015 not yet implemented")
+    def _has_404_language(html: Any) -> bool:
+        if not html:
+            return False
+        soup = BeautifulSoup(str(html), "html.parser")
+        return bool(SOFT_404_TEXT_PATTERN.search(soup.get_text(" ", strip=True)))
+
+    is_200 = pages_df["Status"].astype(str).str.startswith("200")
+    is_thin = pages_df["Word Count"].astype(int) < SOFT_404_WORD_COUNT_MAX
+    has_404_language = pages_df["HTML"].fillna("").apply(_has_404_language)
+    mask = is_200 & is_thin & has_404_language
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C016(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -129,11 +161,21 @@ def check_C017(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C017 not yet implemented")
 
 
-def check_C018(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def _canonical_cross_domain(row: pd.Series) -> bool:
+    canonical = str(row.get("Canonical URL", "")).strip()
+    if not canonical:
+        return False
+    own_domain = urlparse(str(row.get("URL", ""))).netloc.lower()
+    canonical_domain = urlparse(canonical).netloc.lower()
+    return bool(canonical_domain) and canonical_domain != own_domain
+
+
+def check_C018(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """canonical points to a different domain (Warning · Page)
     Cross-domain canonical, verify intent.
     """
-    raise NotImplementedError("C018 not yet implemented")
+    mask = pages_df.apply(_canonical_cross_domain, axis=1)
+    return pages_df.loc[mask, ["URL", "Canonical URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C019(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -162,13 +204,9 @@ CHECKS = {
     "C009": check_C009,
     "C010": check_C010,
     "C011": check_C011,
-    "C012": check_C012,
-    "C013": check_C013,
     "C014": check_C014,
-    "C015": check_C015,
     "C016": check_C016,
     "C017": check_C017,
-    "C018": check_C018,
     "C019": check_C019,
     "C020": check_C020,
 }

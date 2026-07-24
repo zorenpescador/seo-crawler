@@ -5,6 +5,9 @@ See checks/crawlability.py for the pattern these stubs follow.
 from typing import Any, Dict
 
 import pandas as pd
+from bs4 import BeautifulSoup
+
+MIXED_CONTENT_TAG_ATTRS = (("img", "src"), ("script", "src"), ("link", "href"))
 
 
 def check_C022(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -14,11 +17,26 @@ def check_C022(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C022 not yet implemented")
 
 
-def check_C023(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def _has_mixed_content(row: pd.Series) -> bool:
+    url = str(row.get("URL", ""))
+    html = row.get("HTML")
+    if not url.startswith("https://") or not html:
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    for tag, attr in MIXED_CONTENT_TAG_ATTRS:
+        for element in soup.find_all(tag):
+            value = element.get(attr) or ""
+            if value.startswith("http://"):
+                return True
+    return False
+
+
+def check_C023(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """mixed content on page (Error · Page)
     HTTPS page loads http:// sub-resources (img/script/css).
     """
-    raise NotImplementedError("C023 not yet implemented")
+    mask = pages_df.apply(_has_mixed_content, axis=1)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C024(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -72,7 +90,6 @@ def check_C030(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
 
 CHECKS = {
     "C022": check_C022,
-    "C023": check_C023,
     "C024": check_C024,
     "C025": check_C025,
     "C026": check_C026,

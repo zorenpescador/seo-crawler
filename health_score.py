@@ -7,11 +7,16 @@ from typing import Any, Dict, List
 import pandas as pd
 from bs4 import BeautifulSoup
 
-from checks.links import check_C082, check_C086, check_C094
+from checks.architecture import check_C070, check_C071, check_C072, check_C073, check_C074
+from checks.crawlability import check_C012, check_C013, check_C015, check_C018
+from checks.international import check_C096, check_C101, check_C102, check_C106
+from checks.links import check_C082, check_C086, check_C088, check_C092, check_C094, check_C095
 from checks.markup import check_C109, check_C113, check_C116
 from checks.mobile import check_C129, check_C134
 from checks.performance import check_C121, check_C122, check_C123, check_C124, check_C127
 from checks.on_page import check_C042, check_C043, check_C046, check_C047, check_C050, check_C052, check_C058, check_C059, check_C060, check_C061, check_C062, check_C063, check_C064, check_C065
+from checks.redirects import check_C036, check_C037, check_C038
+from checks.security import check_C023
 
 
 SEVERITY_WEIGHTS = {
@@ -237,6 +242,106 @@ FALLBACK_CHECK_CATALOG = {
         "severity": "Warning",
         "notes": "Form fields have no associated <label>, aria-label, or aria-labelledby.",
     },
+    "Noindex Directive": {
+        "category": "Crawlability & Indexability",
+        "severity": "Warning",
+        "notes": "Pages carry a meta robots noindex directive.",
+    },
+    "Meta Nofollow": {
+        "category": "Crawlability & Indexability",
+        "severity": "Warning",
+        "notes": "Pages carry a meta robots nofollow directive, blocking link equity flow.",
+    },
+    "Soft 404": {
+        "category": "Crawlability & Indexability",
+        "severity": "Warning",
+        "notes": "Pages return HTTP 200 but have thin, error-like content.",
+    },
+    "Cross-Domain Canonical": {
+        "category": "Crawlability & Indexability",
+        "severity": "Warning",
+        "notes": "The canonical tag points to a different domain than the page itself.",
+    },
+    "Mixed Content": {
+        "category": "HTTPS & Security",
+        "severity": "Error",
+        "notes": "HTTPS pages load http:// sub-resources (img/script/link).",
+    },
+    "Meta Refresh Redirect": {
+        "category": "Redirects",
+        "severity": "Notice",
+        "notes": "Pages use a meta-refresh redirect instead of a standard HTTP redirect.",
+    },
+    "Trailing Slash Duplicate": {
+        "category": "Redirects",
+        "severity": "Warning",
+        "notes": "Both the trailing-slash and non-trailing-slash URL variants resolve without redirecting.",
+    },
+    "WWW Non-WWW Duplicate": {
+        "category": "Redirects",
+        "severity": "Warning",
+        "notes": "Both the www and non-www host variants resolve without redirecting.",
+    },
+    "Excessive Internal Links": {
+        "category": "Site Architecture & Internal Linking",
+        "severity": "Notice",
+        "notes": "Pages have more than 100 internal links, diluting link equity.",
+    },
+    "Broken Internal Link": {
+        "category": "Site Architecture & Internal Linking",
+        "severity": "Error",
+        "notes": "Pages link internally to a URL that returns a 4XX/5XX status.",
+    },
+    "Internal Link To Redirect": {
+        "category": "Site Architecture & Internal Linking",
+        "severity": "Warning",
+        "notes": "Pages link internally to a URL that redirects instead of the final target.",
+    },
+    "Internal Link Nofollow": {
+        "category": "Site Architecture & Internal Linking",
+        "severity": "Notice",
+        "notes": "Pages use rel=nofollow on an internal link, unusual for site navigation.",
+    },
+    "Generic Anchor Text": {
+        "category": "Site Architecture & Internal Linking",
+        "severity": "Notice",
+        "notes": "Pages have an internal link with empty or generic anchor text (e.g. 'click here').",
+    },
+    "Broken Canonical Target": {
+        "category": "Links",
+        "severity": "Error",
+        "notes": "The canonical URL returns a 4XX/5XX status in the crawled set.",
+    },
+    "Excessive Outbound Links": {
+        "category": "Links",
+        "severity": "Notice",
+        "notes": "Pages have a high ratio of outbound links relative to word count.",
+    },
+    "Insecure Form Action": {
+        "category": "Links",
+        "severity": "Warning",
+        "notes": "A form on an HTTPS page submits to a plain http:// action.",
+    },
+    "Invalid Hreflang Code": {
+        "category": "International SEO",
+        "severity": "Error",
+        "notes": "A hreflang attribute uses a malformed language/region code.",
+    },
+    "Multiple X-Default Hreflang": {
+        "category": "International SEO",
+        "severity": "Warning",
+        "notes": "Pages declare more than one x-default hreflang entry.",
+    },
+    "Missing X-Default Hreflang": {
+        "category": "International SEO",
+        "severity": "Notice",
+        "notes": "Pages have multiple hreflang entries but no x-default.",
+    },
+    "Duplicate Hreflang": {
+        "category": "International SEO",
+        "severity": "Warning",
+        "notes": "Pages declare the same hreflang language/region code more than once.",
+    },
     "Thin Content": {
         "category": "On-Page & Duplicates",
         "severity": "Warning",
@@ -316,6 +421,26 @@ CHECK_NAME_TO_CATALOG_ID = {
     "Render-Blocking Script": "C122",
     "Missing Viewport Meta (Mobile)": "C129",
     "Form Fields Missing Label": "C134",
+    "Noindex Directive": "C012",
+    "Meta Nofollow": "C013",
+    "Soft 404": "C015",
+    "Cross-Domain Canonical": "C018",
+    "Mixed Content": "C023",
+    "Meta Refresh Redirect": "C036",
+    "Trailing Slash Duplicate": "C037",
+    "WWW Non-WWW Duplicate": "C038",
+    "Excessive Internal Links": "C070",
+    "Broken Internal Link": "C071",
+    "Internal Link To Redirect": "C072",
+    "Internal Link Nofollow": "C073",
+    "Generic Anchor Text": "C074",
+    "Broken Canonical Target": "C088",
+    "Excessive Outbound Links": "C092",
+    "Insecure Form Action": "C095",
+    "Invalid Hreflang Code": "C096",
+    "Multiple X-Default Hreflang": "C101",
+    "Missing X-Default Hreflang": "C102",
+    "Duplicate Hreflang": "C106",
     "Thin Content": "C053",
     "Low Internal Link Support": "C076",
     "Missing Schema": "C108",
@@ -515,6 +640,26 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
     render_blocking_script = check_C122(work_df)
     missing_viewport_mobile = check_C129(work_df)
     form_fields_missing_label = check_C134(work_df)
+    noindex_directive = check_C012(work_df)
+    meta_nofollow = check_C013(work_df)
+    soft_404 = check_C015(work_df)
+    cross_domain_canonical = check_C018(work_df)
+    mixed_content = check_C023(work_df)
+    meta_refresh_redirect = check_C036(work_df)
+    trailing_slash_duplicate = check_C037(work_df)
+    www_non_www_duplicate = check_C038(work_df)
+    excessive_internal_links = check_C070(work_df)
+    broken_internal_link = check_C071(work_df)
+    internal_link_to_redirect = check_C072(work_df)
+    internal_link_nofollow = check_C073(work_df)
+    generic_anchor_text = check_C074(work_df)
+    broken_canonical_target = check_C088(work_df)
+    excessive_outbound_links = check_C092(work_df)
+    insecure_form_action = check_C095(work_df)
+    invalid_hreflang_code = check_C096(work_df)
+    multiple_x_default_hreflang = check_C101(work_df)
+    missing_x_default_hreflang = check_C102(work_df)
+    duplicate_hreflang = check_C106(work_df)
     non_https_pages = work_df[~work_df["URL"].astype(str).str.startswith("https://")][["URL"]].drop_duplicates().reset_index(drop=True)
     redirect_pages = work_df[work_df["Status"].astype(str).str.startswith(("301", "302", "303", "307", "308"))][["URL"]].drop_duplicates().reset_index(drop=True)
     missing_schema = work_df[work_df["Schema"].astype(str).str.strip().eq("")][["URL"]].drop_duplicates().reset_index(drop=True)
@@ -927,6 +1072,186 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
         affected_pages=len(form_fields_missing_label),
         total_pages=total_pages,
         notes=_catalog_reference("Form Fields Missing Label")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Noindex Directive")["category"],
+        check="Noindex Directive",
+        severity=_catalog_reference("Noindex Directive")["severity"],
+        affected_pages=len(noindex_directive),
+        total_pages=total_pages,
+        notes=_catalog_reference("Noindex Directive")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Meta Nofollow")["category"],
+        check="Meta Nofollow",
+        severity=_catalog_reference("Meta Nofollow")["severity"],
+        affected_pages=len(meta_nofollow),
+        total_pages=total_pages,
+        notes=_catalog_reference("Meta Nofollow")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Soft 404")["category"],
+        check="Soft 404",
+        severity=_catalog_reference("Soft 404")["severity"],
+        affected_pages=len(soft_404),
+        total_pages=total_pages,
+        notes=_catalog_reference("Soft 404")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Cross-Domain Canonical")["category"],
+        check="Cross-Domain Canonical",
+        severity=_catalog_reference("Cross-Domain Canonical")["severity"],
+        affected_pages=len(cross_domain_canonical),
+        total_pages=total_pages,
+        notes=_catalog_reference("Cross-Domain Canonical")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Mixed Content")["category"],
+        check="Mixed Content",
+        severity=_catalog_reference("Mixed Content")["severity"],
+        affected_pages=len(mixed_content),
+        total_pages=total_pages,
+        notes=_catalog_reference("Mixed Content")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Meta Refresh Redirect")["category"],
+        check="Meta Refresh Redirect",
+        severity=_catalog_reference("Meta Refresh Redirect")["severity"],
+        affected_pages=len(meta_refresh_redirect),
+        total_pages=total_pages,
+        notes=_catalog_reference("Meta Refresh Redirect")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Trailing Slash Duplicate")["category"],
+        check="Trailing Slash Duplicate",
+        severity=_catalog_reference("Trailing Slash Duplicate")["severity"],
+        affected_pages=len(trailing_slash_duplicate),
+        total_pages=total_pages,
+        notes=_catalog_reference("Trailing Slash Duplicate")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("WWW Non-WWW Duplicate")["category"],
+        check="WWW Non-WWW Duplicate",
+        severity=_catalog_reference("WWW Non-WWW Duplicate")["severity"],
+        affected_pages=len(www_non_www_duplicate),
+        total_pages=total_pages,
+        notes=_catalog_reference("WWW Non-WWW Duplicate")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Excessive Internal Links")["category"],
+        check="Excessive Internal Links",
+        severity=_catalog_reference("Excessive Internal Links")["severity"],
+        affected_pages=len(excessive_internal_links),
+        total_pages=total_pages,
+        notes=_catalog_reference("Excessive Internal Links")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Broken Internal Link")["category"],
+        check="Broken Internal Link",
+        severity=_catalog_reference("Broken Internal Link")["severity"],
+        affected_pages=len(broken_internal_link),
+        total_pages=total_pages,
+        notes=_catalog_reference("Broken Internal Link")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Internal Link To Redirect")["category"],
+        check="Internal Link To Redirect",
+        severity=_catalog_reference("Internal Link To Redirect")["severity"],
+        affected_pages=len(internal_link_to_redirect),
+        total_pages=total_pages,
+        notes=_catalog_reference("Internal Link To Redirect")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Internal Link Nofollow")["category"],
+        check="Internal Link Nofollow",
+        severity=_catalog_reference("Internal Link Nofollow")["severity"],
+        affected_pages=len(internal_link_nofollow),
+        total_pages=total_pages,
+        notes=_catalog_reference("Internal Link Nofollow")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Generic Anchor Text")["category"],
+        check="Generic Anchor Text",
+        severity=_catalog_reference("Generic Anchor Text")["severity"],
+        affected_pages=len(generic_anchor_text),
+        total_pages=total_pages,
+        notes=_catalog_reference("Generic Anchor Text")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Broken Canonical Target")["category"],
+        check="Broken Canonical Target",
+        severity=_catalog_reference("Broken Canonical Target")["severity"],
+        affected_pages=len(broken_canonical_target),
+        total_pages=total_pages,
+        notes=_catalog_reference("Broken Canonical Target")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Excessive Outbound Links")["category"],
+        check="Excessive Outbound Links",
+        severity=_catalog_reference("Excessive Outbound Links")["severity"],
+        affected_pages=len(excessive_outbound_links),
+        total_pages=total_pages,
+        notes=_catalog_reference("Excessive Outbound Links")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Insecure Form Action")["category"],
+        check="Insecure Form Action",
+        severity=_catalog_reference("Insecure Form Action")["severity"],
+        affected_pages=len(insecure_form_action),
+        total_pages=total_pages,
+        notes=_catalog_reference("Insecure Form Action")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Invalid Hreflang Code")["category"],
+        check="Invalid Hreflang Code",
+        severity=_catalog_reference("Invalid Hreflang Code")["severity"],
+        affected_pages=len(invalid_hreflang_code),
+        total_pages=total_pages,
+        notes=_catalog_reference("Invalid Hreflang Code")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Multiple X-Default Hreflang")["category"],
+        check="Multiple X-Default Hreflang",
+        severity=_catalog_reference("Multiple X-Default Hreflang")["severity"],
+        affected_pages=len(multiple_x_default_hreflang),
+        total_pages=total_pages,
+        notes=_catalog_reference("Multiple X-Default Hreflang")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Missing X-Default Hreflang")["category"],
+        check="Missing X-Default Hreflang",
+        severity=_catalog_reference("Missing X-Default Hreflang")["severity"],
+        affected_pages=len(missing_x_default_hreflang),
+        total_pages=total_pages,
+        notes=_catalog_reference("Missing X-Default Hreflang")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Duplicate Hreflang")["category"],
+        check="Duplicate Hreflang",
+        severity=_catalog_reference("Duplicate Hreflang")["severity"],
+        affected_pages=len(duplicate_hreflang),
+        total_pages=total_pages,
+        notes=_catalog_reference("Duplicate Hreflang")["notes"],
     )
     _add_finding(
         findings,
