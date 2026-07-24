@@ -4,9 +4,12 @@ health_score.py already implements slow-response-time. These stubs cover
 the rest of the category. See checks/crawlability.py for the pattern.
 """
 from typing import Any, Dict
+from urllib.parse import urlparse
 
 import pandas as pd
 from bs4 import BeautifulSoup
+
+LEGACY_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".bmp")
 
 
 def check_C119(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -48,9 +51,25 @@ def check_C123(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C124(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """images not using modern formats (webp/avif) where alternatives exist (Notice · Page)"""
-    raise NotImplementedError("C124 not yet implemented")
+def _has_legacy_format_image(html: Any) -> bool:
+    if not html:
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    for img in soup.find_all("img"):
+        src = img.get("src") or ""
+        path = urlparse(src).path.lower()
+        if path.endswith(LEGACY_IMAGE_EXTENSIONS):
+            return True
+    return False
+
+
+def check_C124(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """images not using modern formats (webp/avif) where alternatives exist (Notice · Page)
+    Heuristic based on file extension only; doesn't verify a webp/avif
+    alternative is actually available server-side.
+    """
+    mask = pages_df["HTML"].fillna("").apply(_has_legacy_format_image)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C125(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -97,7 +116,6 @@ CHECKS = {
     "C120": check_C120,
     "C121": check_C121,
     "C122": check_C122,
-    "C124": check_C124,
     "C125": check_C125,
     "C126": check_C126,
     "C128": check_C128,

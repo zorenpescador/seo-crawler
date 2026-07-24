@@ -8,7 +8,7 @@ import pandas as pd
 from bs4 import BeautifulSoup
 
 from checks.markup import check_C109, check_C113, check_C116
-from checks.performance import check_C123, check_C127
+from checks.performance import check_C123, check_C124, check_C127
 from checks.on_page import check_C042, check_C043, check_C046, check_C047, check_C050, check_C052, check_C058, check_C059, check_C061, check_C062, check_C064, check_C065
 
 
@@ -185,6 +185,11 @@ FALLBACK_CHECK_CATALOG = {
         "severity": "Notice",
         "notes": "Pages have more than 1500 DOM nodes, approximated via tag count.",
     },
+    "Legacy Image Formats": {
+        "category": "Site Performance",
+        "severity": "Notice",
+        "notes": "Images use legacy formats (jpg/png/gif/bmp) instead of webp/avif.",
+    },
     "Thin Content": {
         "category": "On-Page & Duplicates",
         "severity": "Warning",
@@ -254,6 +259,7 @@ CHECK_NAME_TO_CATALOG_ID = {
     "Invalid Structured Data": "C109",
     "Images Missing Dimensions": "C123",
     "Excessive DOM Size": "C127",
+    "Legacy Image Formats": "C124",
     "Thin Content": "C053",
     "Low Internal Link Support": "C076",
     "Missing Schema": "C108",
@@ -443,6 +449,7 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
     slow_pages = work_df[work_df["Crawl Time (s)"].astype(float) > 2.5][["URL"]].drop_duplicates().reset_index(drop=True)
     images_missing_dimensions = check_C123(work_df)
     excessive_dom_size = check_C127(work_df)
+    legacy_image_formats = check_C124(work_df)
     non_https_pages = work_df[~work_df["URL"].astype(str).str.startswith("https://")][["URL"]].drop_duplicates().reset_index(drop=True)
     redirect_pages = work_df[work_df["Status"].astype(str).str.startswith(("301", "302", "303", "307", "308"))][["URL"]].drop_duplicates().reset_index(drop=True)
     missing_schema = work_df[work_df["Schema"].astype(str).str.strip().eq("")][["URL"]].drop_duplicates().reset_index(drop=True)
@@ -765,6 +772,15 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
         affected_pages=len(excessive_dom_size),
         total_pages=total_pages,
         notes=_catalog_reference("Excessive DOM Size")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Legacy Image Formats")["category"],
+        check="Legacy Image Formats",
+        severity=_catalog_reference("Legacy Image Formats")["severity"],
+        affected_pages=len(legacy_image_formats),
+        total_pages=total_pages,
+        notes=_catalog_reference("Legacy Image Formats")["notes"],
     )
     _add_finding(
         findings,
