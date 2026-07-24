@@ -4,6 +4,7 @@ health_score.py already implements: missing title/description/H1/canonical,
 thin content, duplicate titles/descriptions/H1/body, and (via this module)
 title/description length. See checks/crawlability.py for the stub pattern.
 """
+import re
 from typing import Any, Dict
 from urllib.parse import parse_qs, urlparse
 
@@ -127,9 +128,26 @@ def check_C059(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C060(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """broken heading hierarchy (e.g. H1 -> H3, skipping H2) (Notice · Page)"""
-    raise NotImplementedError("C060 not yet implemented")
+def _has_heading_hierarchy_skip(html: Any) -> bool:
+    if not html:
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    levels = [int(h.name[1]) for h in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"])]
+    seen_max = 0
+    for level in levels:
+        if seen_max and level > seen_max + 1:
+            return True
+        seen_max = max(seen_max, level)
+    return False
+
+
+def check_C060(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """broken heading hierarchy (e.g. H1 -> H3, skipping H2) (Notice · Page)
+    Flags a level jump of more than one (e.g. H1 straight to H3). Dropping
+    back to a shallower level (H3 back to H1) is normal and not flagged.
+    """
+    mask = pages_df["HTML"].fillna("").apply(_has_heading_hierarchy_skip)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def _query_param_count(url: Any) -> int:
@@ -156,9 +174,24 @@ def check_C062(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C063(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """non-descriptive URL (auto-generated IDs/slugs) (Notice · Page)"""
-    raise NotImplementedError("C063 not yet implemented")
+NON_DESCRIPTIVE_SLUG_PATTERN = re.compile(r"^(\d+|[0-9a-f]{8,})$", re.IGNORECASE)
+
+
+def _is_non_descriptive_url(url: Any) -> bool:
+    path = urlparse(str(url)).path.rstrip("/")
+    if not path:
+        return False
+    last_segment = path.rsplit("/", 1)[-1]
+    return bool(NON_DESCRIPTIVE_SLUG_PATTERN.match(last_segment))
+
+
+def check_C063(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """non-descriptive URL (auto-generated IDs/slugs) (Notice · Page)
+    Heuristic: final path segment is purely numeric, or a long hex string
+    (8+ chars), e.g. /product/48213 or /post/3f9a2c1e.
+    """
+    mask = pages_df["URL"].apply(_is_non_descriptive_url)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C064(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
@@ -178,6 +211,4 @@ def check_C065(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
 CHECKS = {
     "C055": check_C055,
     "C057": check_C057,
-    "C060": check_C060,
-    "C063": check_C063,
 }

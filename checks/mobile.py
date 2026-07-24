@@ -6,11 +6,23 @@ cover the rest of the category. See checks/crawlability.py for the pattern.
 from typing import Any, Dict
 
 import pandas as pd
+from bs4 import BeautifulSoup
 
 
-def check_C129(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """no viewport meta tag (duplicate of Markup check, surfaced here for mobile UX lens) (Warning · Page)"""
-    raise NotImplementedError("C129 not yet implemented")
+def _has_viewport_meta(html: Any) -> bool:
+    if not html:
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    return bool(soup.find("meta", attrs={"name": "viewport"}))
+
+
+def check_C129(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """no viewport meta tag (duplicate of Markup check, surfaced here for mobile UX lens) (Warning · Page)
+    Same underlying detection as Missing Viewport Meta (C117); the catalog
+    intentionally lists it twice for two different reporting lenses.
+    """
+    mask = ~pages_df["HTML"].fillna("").apply(_has_viewport_meta)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C131(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -30,9 +42,35 @@ def check_C133(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C133 not yet implemented")
 
 
-def check_C134(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """form fields missing associated <label> (Warning · Page)"""
-    raise NotImplementedError("C134 not yet implemented")
+NON_LABELABLE_INPUT_TYPES = {"hidden", "submit", "button", "image", "reset"}
+
+
+def _has_unlabeled_form_field(html: Any) -> bool:
+    if not html:
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    label_fors = {lbl.get("for") for lbl in soup.find_all("label") if lbl.get("for")}
+    for field in soup.find_all(["input", "select", "textarea"]):
+        if field.name == "input" and str(field.get("type", "text")).lower() in NON_LABELABLE_INPUT_TYPES:
+            continue
+        field_id = field.get("id")
+        if field_id and field_id in label_fors:
+            continue
+        if field.find_parent("label"):
+            continue
+        if field.get("aria-label") or field.get("aria-labelledby"):
+            continue
+        return True
+    return False
+
+
+def check_C134(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """form fields missing associated <label> (Warning · Page)
+    A field counts as labeled if it has a matching <label for=id>, is
+    wrapped in a <label>, or carries aria-label/aria-labelledby.
+    """
+    mask = pages_df["HTML"].fillna("").apply(_has_unlabeled_form_field)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C135(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -43,10 +81,8 @@ def check_C135(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
 
 
 CHECKS = {
-    "C129": check_C129,
     "C131": check_C131,
     "C132": check_C132,
     "C133": check_C133,
-    "C134": check_C134,
     "C135": check_C135,
 }

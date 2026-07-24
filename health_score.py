@@ -7,9 +7,11 @@ from typing import Any, Dict, List
 import pandas as pd
 from bs4 import BeautifulSoup
 
+from checks.links import check_C082, check_C086, check_C094
 from checks.markup import check_C109, check_C113, check_C116
-from checks.performance import check_C123, check_C124, check_C127
-from checks.on_page import check_C042, check_C043, check_C046, check_C047, check_C050, check_C052, check_C058, check_C059, check_C061, check_C062, check_C064, check_C065
+from checks.mobile import check_C129, check_C134
+from checks.performance import check_C121, check_C122, check_C123, check_C124, check_C127
+from checks.on_page import check_C042, check_C043, check_C046, check_C047, check_C050, check_C052, check_C058, check_C059, check_C060, check_C061, check_C062, check_C063, check_C064, check_C065
 
 
 SEVERITY_WEIGHTS = {
@@ -190,6 +192,51 @@ FALLBACK_CHECK_CATALOG = {
         "severity": "Notice",
         "notes": "Images use legacy formats (jpg/png/gif/bmp) instead of webp/avif.",
     },
+    "Broken Heading Hierarchy": {
+        "category": "On-Page & Duplicates",
+        "severity": "Notice",
+        "notes": "Heading levels skip more than one step (e.g. H1 straight to H3).",
+    },
+    "Non-Descriptive URL": {
+        "category": "On-Page & Duplicates",
+        "severity": "Notice",
+        "notes": "URLs end in an auto-generated numeric or hex ID rather than a descriptive slug.",
+    },
+    "Insecure External Link": {
+        "category": "Links",
+        "severity": "Notice",
+        "notes": "Pages link out to an external domain over plain HTTP.",
+    },
+    "Offsite Image Hosting": {
+        "category": "Links",
+        "severity": "Notice",
+        "notes": "Images are hosted on a different, uncontrolled domain (hotlinking risk).",
+    },
+    "JavaScript Void Link": {
+        "category": "Links",
+        "severity": "Notice",
+        "notes": "Links use a javascript:void href with no real fallback target.",
+    },
+    "Excessive Inferred Requests": {
+        "category": "Site Performance",
+        "severity": "Notice",
+        "notes": "Pages have more than 100 script/link/img tags, a proxy for request count.",
+    },
+    "Render-Blocking Script": {
+        "category": "Site Performance",
+        "severity": "Notice",
+        "notes": "A <script src> in <head> lacks async/defer, blocking rendering.",
+    },
+    "Missing Viewport Meta (Mobile)": {
+        "category": "Mobile & Accessibility",
+        "severity": "Warning",
+        "notes": "Pages are missing a viewport meta tag (mobile UX lens).",
+    },
+    "Form Fields Missing Label": {
+        "category": "Mobile & Accessibility",
+        "severity": "Warning",
+        "notes": "Form fields have no associated <label>, aria-label, or aria-labelledby.",
+    },
     "Thin Content": {
         "category": "On-Page & Duplicates",
         "severity": "Warning",
@@ -260,6 +307,15 @@ CHECK_NAME_TO_CATALOG_ID = {
     "Images Missing Dimensions": "C123",
     "Excessive DOM Size": "C127",
     "Legacy Image Formats": "C124",
+    "Broken Heading Hierarchy": "C060",
+    "Non-Descriptive URL": "C063",
+    "Insecure External Link": "C082",
+    "Offsite Image Hosting": "C086",
+    "JavaScript Void Link": "C094",
+    "Excessive Inferred Requests": "C121",
+    "Render-Blocking Script": "C122",
+    "Missing Viewport Meta (Mobile)": "C129",
+    "Form Fields Missing Label": "C134",
     "Thin Content": "C053",
     "Low Internal Link Support": "C076",
     "Missing Schema": "C108",
@@ -450,6 +506,15 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
     images_missing_dimensions = check_C123(work_df)
     excessive_dom_size = check_C127(work_df)
     legacy_image_formats = check_C124(work_df)
+    broken_heading_hierarchy = check_C060(work_df)
+    non_descriptive_url = check_C063(work_df)
+    insecure_external_link = check_C082(work_df)
+    offsite_image_hosting = check_C086(work_df)
+    javascript_void_link = check_C094(work_df)
+    excessive_inferred_requests = check_C121(work_df)
+    render_blocking_script = check_C122(work_df)
+    missing_viewport_mobile = check_C129(work_df)
+    form_fields_missing_label = check_C134(work_df)
     non_https_pages = work_df[~work_df["URL"].astype(str).str.startswith("https://")][["URL"]].drop_duplicates().reset_index(drop=True)
     redirect_pages = work_df[work_df["Status"].astype(str).str.startswith(("301", "302", "303", "307", "308"))][["URL"]].drop_duplicates().reset_index(drop=True)
     missing_schema = work_df[work_df["Schema"].astype(str).str.strip().eq("")][["URL"]].drop_duplicates().reset_index(drop=True)
@@ -781,6 +846,87 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
         affected_pages=len(legacy_image_formats),
         total_pages=total_pages,
         notes=_catalog_reference("Legacy Image Formats")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Broken Heading Hierarchy")["category"],
+        check="Broken Heading Hierarchy",
+        severity=_catalog_reference("Broken Heading Hierarchy")["severity"],
+        affected_pages=len(broken_heading_hierarchy),
+        total_pages=total_pages,
+        notes=_catalog_reference("Broken Heading Hierarchy")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Non-Descriptive URL")["category"],
+        check="Non-Descriptive URL",
+        severity=_catalog_reference("Non-Descriptive URL")["severity"],
+        affected_pages=len(non_descriptive_url),
+        total_pages=total_pages,
+        notes=_catalog_reference("Non-Descriptive URL")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Insecure External Link")["category"],
+        check="Insecure External Link",
+        severity=_catalog_reference("Insecure External Link")["severity"],
+        affected_pages=len(insecure_external_link),
+        total_pages=total_pages,
+        notes=_catalog_reference("Insecure External Link")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Offsite Image Hosting")["category"],
+        check="Offsite Image Hosting",
+        severity=_catalog_reference("Offsite Image Hosting")["severity"],
+        affected_pages=len(offsite_image_hosting),
+        total_pages=total_pages,
+        notes=_catalog_reference("Offsite Image Hosting")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("JavaScript Void Link")["category"],
+        check="JavaScript Void Link",
+        severity=_catalog_reference("JavaScript Void Link")["severity"],
+        affected_pages=len(javascript_void_link),
+        total_pages=total_pages,
+        notes=_catalog_reference("JavaScript Void Link")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Excessive Inferred Requests")["category"],
+        check="Excessive Inferred Requests",
+        severity=_catalog_reference("Excessive Inferred Requests")["severity"],
+        affected_pages=len(excessive_inferred_requests),
+        total_pages=total_pages,
+        notes=_catalog_reference("Excessive Inferred Requests")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Render-Blocking Script")["category"],
+        check="Render-Blocking Script",
+        severity=_catalog_reference("Render-Blocking Script")["severity"],
+        affected_pages=len(render_blocking_script),
+        total_pages=total_pages,
+        notes=_catalog_reference("Render-Blocking Script")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Missing Viewport Meta (Mobile)")["category"],
+        check="Missing Viewport Meta (Mobile)",
+        severity=_catalog_reference("Missing Viewport Meta (Mobile)")["severity"],
+        affected_pages=len(missing_viewport_mobile),
+        total_pages=total_pages,
+        notes=_catalog_reference("Missing Viewport Meta (Mobile)")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Form Fields Missing Label")["category"],
+        check="Form Fields Missing Label",
+        severity=_catalog_reference("Form Fields Missing Label")["severity"],
+        affected_pages=len(form_fields_missing_label),
+        total_pages=total_pages,
+        notes=_catalog_reference("Form Fields Missing Label")["notes"],
     )
     _add_finding(
         findings,

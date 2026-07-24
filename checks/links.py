@@ -3,8 +3,10 @@
 See checks/crawlability.py for the pattern these stubs follow.
 """
 from typing import Any, Dict
+from urllib.parse import urlparse
 
 import pandas as pd
+from bs4 import BeautifulSoup
 
 
 def check_C081(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -14,9 +16,22 @@ def check_C081(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C081 not yet implemented")
 
 
-def check_C082(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def _has_insecure_external_link(html: Any, page_url: Any) -> bool:
+    if not html:
+        return False
+    own_domain = urlparse(str(page_url)).netloc.lower()
+    soup = BeautifulSoup(str(html), "html.parser")
+    for a in soup.find_all("a", href=True):
+        parsed = urlparse(a["href"])
+        if parsed.scheme == "http" and parsed.netloc and parsed.netloc.lower() != own_domain:
+            return True
+    return False
+
+
+def check_C082(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """external link to a domain with no HTTPS (Notice · Page)"""
-    raise NotImplementedError("C082 not yet implemented")
+    mask = pages_df.apply(lambda row: _has_insecure_external_link(row.get("HTML"), row.get("URL")), axis=1)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C083(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -36,11 +51,25 @@ def check_C085(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C085 not yet implemented")
 
 
-def check_C086(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def _has_offsite_image(html: Any, page_url: Any) -> bool:
+    if not html:
+        return False
+    own_domain = urlparse(str(page_url)).netloc.lower()
+    soup = BeautifulSoup(str(html), "html.parser")
+    for img in soup.find_all("img"):
+        src = img.get("src") or ""
+        parsed = urlparse(src)
+        if parsed.netloc and parsed.netloc.lower() != own_domain:
+            return True
+    return False
+
+
+def check_C086(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """image hosted on a different (uncontrolled) domain (Notice · Page)
     Hotlinking risk / dependency risk.
     """
-    raise NotImplementedError("C086 not yet implemented")
+    mask = pages_df.apply(lambda row: _has_offsite_image(row.get("HTML"), row.get("URL")), axis=1)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C087(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -82,9 +111,20 @@ def check_C093(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C093 not yet implemented")
 
 
-def check_C094(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def _has_javascript_void_link(html: Any) -> bool:
+    if not html:
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    for a in soup.find_all("a", href=True):
+        if a["href"].strip().lower().startswith("javascript:"):
+            return True
+    return False
+
+
+def check_C094(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """link with no href fallback (javascript:void) (Notice · Page)"""
-    raise NotImplementedError("C094 not yet implemented")
+    mask = pages_df["HTML"].fillna("").apply(_has_javascript_void_link)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C095(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -94,11 +134,9 @@ def check_C095(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
 
 CHECKS = {
     "C081": check_C081,
-    "C082": check_C082,
     "C083": check_C083,
     "C084": check_C084,
     "C085": check_C085,
-    "C086": check_C086,
     "C087": check_C087,
     "C088": check_C088,
     "C089": check_C089,
@@ -106,6 +144,5 @@ CHECKS = {
     "C091": check_C091,
     "C092": check_C092,
     "C093": check_C093,
-    "C094": check_C094,
     "C095": check_C095,
 }

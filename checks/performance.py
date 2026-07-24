@@ -24,18 +24,43 @@ def check_C120(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C120 not yet implemented")
 
 
-def check_C121(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+INFERRED_REQUEST_COUNT_MAX = 100
+
+
+def _inferred_request_count(html: Any) -> int:
+    if not html:
+        return 0
+    soup = BeautifulSoup(str(html), "html.parser")
+    return len(soup.find_all(["script", "link", "img"]))
+
+
+def check_C121(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """excessive number of on-page requests inferred (script/link/img tag count) (Notice · Page)
     Proxy metric, not real waterfall.
     """
-    raise NotImplementedError("C121 not yet implemented")
+    counts = pages_df["HTML"].fillna("").apply(_inferred_request_count)
+    return pages_df.loc[counts.gt(INFERRED_REQUEST_COUNT_MAX), ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C122(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def _has_render_blocking_script(html: Any) -> bool:
+    if not html:
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    head = soup.find("head")
+    if not head:
+        return False
+    for script in head.find_all("script", src=True):
+        if not script.has_attr("async") and not script.has_attr("defer"):
+            return True
+    return False
+
+
+def check_C122(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """render-blocking CSS/JS in <head> (Notice · Page)
-    Heuristic: <script> without async/defer before body content.
+    Heuristic: <script src> in <head> without async/defer before body content.
     """
-    raise NotImplementedError("C122 not yet implemented")
+    mask = pages_df["HTML"].fillna("").apply(_has_render_blocking_script)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def _has_image_missing_dimensions(html: Any) -> bool:
@@ -114,8 +139,6 @@ def check_C128(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
 CHECKS = {
     "C119": check_C119,
     "C120": check_C120,
-    "C121": check_C121,
-    "C122": check_C122,
     "C125": check_C125,
     "C126": check_C126,
     "C128": check_C128,
