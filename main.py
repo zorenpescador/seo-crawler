@@ -5,6 +5,9 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 import xml.etree.ElementTree as ET
+import ssl
+import socket
+from datetime import datetime, timedelta, timezone
 import pandas as pd
 import json
 import re
@@ -45,8 +48,45 @@ def allowed_by_robots(url, ignore_robots=False):
     except Exception:
         return True, robots_url
 
+def fetch_ssl_info(hostname, port=443, timeout=5):
+    """Inspect the TLS certificate for a domain via a single verifying
+    handshake.
+
+    getpeercert() only returns parsed fields for a *verified* connection
+    (with an unverified/CERT_NONE context it returns an empty dict), so a
+    successful connection here both confirms validity and gives us
+    notAfter directly. An expired or hostname-mismatched cert instead
+    fails the handshake with ssl.SSLCertVerificationError; we classify
+    which one occurred from the exception's message, since exact wording
+    can vary slightly across OpenSSL/Python versions.
+    """
+    ssl_info = {"checked": False, "not_after": None, "hostname_matches": None, "expired": False}
+    ctx = ssl.create_default_context()
+    try:
+        with socket.create_connection((hostname, port), timeout=timeout) as sock:
+            with ctx.wrap_socket(sock, server_hostname=hostname) as ssock:
+                cert = ssock.getpeercert()
+        ssl_info["checked"] = True
+        ssl_info["hostname_matches"] = True
+        not_after_str = cert.get("notAfter")
+        if not_after_str:
+            ssl_info["not_after"] = datetime.strptime(
+                not_after_str, "%b %d %H:%M:%S %Y %Z"
+            ).replace(tzinfo=timezone.utc)
+    except ssl.SSLCertVerificationError as e:
+        ssl_info["checked"] = True
+        reason = str(getattr(e, "verify_message", "") or e).lower()
+        if "expired" in reason:
+            ssl_info["expired"] = True
+        elif "hostname mismatch" in reason or "doesn't match" in reason or "does not match" in reason:
+            ssl_info["hostname_matches"] = False
+    except Exception:
+        pass
+    return ssl_info
+
 def fetch_site_context(base, session):
-    """Fetch robots.txt and sitemap.xml once per crawl for site-level checks.
+    """Fetch robots.txt, sitemap.xml, and the TLS cert once per crawl for
+    site-level checks.
 
     Called once from crawl_site() and cached in st.session_state.crawl_metadata
     alongside the crawl results, so it is not re-fetched on every Streamlit rerun.
@@ -59,6 +99,8 @@ def fetch_site_context(base, session):
         "sitemap_found": False,
         "sitemap_valid": None,
         "sitemap_urls": [],
+        "sitemap_hreflang_by_url": {},
+        "ssl_info": {"checked": False, "not_after": None, "hostname_matches": None, "expired": False},
     }
 
     try:
@@ -91,11 +133,33 @@ def fetch_site_context(base, session):
                     for elem in root.iter()
                     if elem.tag.split("}")[-1] == "loc" and elem.text
                 ]
+                hreflang_by_url = {}
+                for url_elem in root:
+                    if url_elem.tag.split("}")[-1] != "url":
+                        continue
+                    loc = None
+                    hreflang_map = {}
+                    for child in url_elem:
+                        child_tag = child.tag.split("}")[-1]
+                        if child_tag == "loc" and child.text:
+                            loc = child.text.strip()
+                        elif child_tag == "link":
+                            hreflang = child.get("hreflang", "")
+                            href = child.get("href", "")
+                            if child.get("rel") == "alternate" and hreflang and href:
+                                hreflang_map[hreflang.lower()] = href
+                    if loc:
+                        hreflang_by_url[loc] = hreflang_map
+                site_ctx["sitemap_hreflang_by_url"] = hreflang_by_url
                 site_ctx["sitemap_valid"] = True
             except ET.ParseError:
                 site_ctx["sitemap_valid"] = False
     except Exception:
         pass
+
+    parsed_base = urlparse(base)
+    if parsed_base.scheme == "https" and parsed_base.hostname:
+        site_ctx["ssl_info"] = fetch_ssl_info(parsed_base.hostname)
 
     return site_ctx
 
@@ -305,7 +369,8 @@ def crawl_site(seed_url, max_pages=100, delay=0.5, ignore_robots=False, show_pro
                 "X-Content-Type-Options": r.headers.get("X-Content-Type-Options", ""),
                 "X-Frame-Options": r.headers.get("X-Frame-Options", ""),
                 "Content-Security-Policy": r.headers.get("Content-Security-Policy", ""),
-                "Cache-Control": r.headers.get("Cache-Control", "")
+                "Cache-Control": r.headers.get("Cache-Control", ""),
+                "X-Robots-Tag": r.headers.get("X-Robots-Tag", "")
             })
 
             for link in internal_links:

@@ -139,11 +139,33 @@ def check_C102(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C103(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C103(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """hreflang set is not confirmed on all pages in the cluster (Warning · Site)
-    Inconsistent cluster membership.
+    Inconsistent cluster membership: a page's hreflang set (itself plus
+    its declared alternates) should match every other member's own set.
+    Only checks clusters fully contained within the crawled set.
     """
-    raise NotImplementedError("C103 not yet implemented")
+    targets_by_url = {
+        str(row["URL"]): {e["href"] for e in _hreflang_entries(row.get("HTML")) if e["href"]}
+        for _, row in pages_df.iterrows()
+    }
+
+    def _is_inconsistent(row: pd.Series) -> bool:
+        url = str(row["URL"])
+        own_targets = targets_by_url.get(url, set())
+        if not own_targets:
+            return False
+        expected_cluster = own_targets | {url}
+        for member in expected_cluster:
+            member_targets = targets_by_url.get(member)
+            if member_targets is None:
+                continue
+            if (member_targets | {member}) != expected_cluster:
+                return True
+        return False
+
+    mask = pages_df.apply(_is_inconsistent, axis=1)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def _html_lang(html: Any) -> str:
@@ -176,9 +198,27 @@ def check_C104(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C105(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """hreflang declared in HTML and sitemap disagree (Warning · Site)"""
-    raise NotImplementedError("C105 not yet implemented")
+def check_C105(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """hreflang declared in HTML and sitemap disagree (Warning · Site)
+    Only checks pages whose URL appears in the sitemap's own per-URL
+    hreflang annotations (the xhtml:link extension); most sitemaps don't
+    include this, so this will often find nothing to compare against.
+    """
+    site_ctx = site_ctx or {}
+    sitemap_hreflang = site_ctx.get("sitemap_hreflang_by_url") or {}
+    if not sitemap_hreflang:
+        return pages_df.iloc[0:0][["URL"]]
+
+    def _disagrees(row: pd.Series) -> bool:
+        url = str(row.get("URL", ""))
+        sitemap_set = sitemap_hreflang.get(url)
+        if sitemap_set is None:
+            return False
+        html_set = {e["hreflang"].lower(): e["href"] for e in _hreflang_entries(row.get("HTML")) if e["hreflang"]}
+        return html_set != sitemap_set
+
+    mask = pages_df.apply(_disagrees, axis=1)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C106(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
@@ -191,15 +231,61 @@ def check_C106(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C107(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """content language auto-detection mismatch (declared vs detected) (Notice · Page)
-    Basic language-detection heuristic.
-    """
-    raise NotImplementedError("C107 not yet implemented")
-
-
-CHECKS = {
-    "C103": check_C103,
-    "C105": check_C105,
-    "C107": check_C107,
+LANGUAGE_STOPWORDS = {
+    "en": {"the", "and", "of", "to", "in", "is", "for", "that", "this", "with", "are", "was", "on", "as"},
+    "es": {"el", "la", "de", "que", "en", "los", "del", "las", "por", "con", "una", "para", "como"},
+    "fr": {"le", "la", "de", "et", "les", "des", "est", "que", "pour", "dans", "une", "sur", "avec"},
+    "de": {"der", "die", "und", "das", "den", "ist", "mit", "von", "auf", "für", "dem", "ein", "eine"},
+    "pt": {"de", "que", "com", "para", "uma", "por", "dos", "das", "como", "mais", "seu", "sua"},
+    "it": {"il", "di", "che", "la", "per", "con", "una", "del", "gli", "alla", "non", "sono"},
 }
+LANGUAGE_DETECTION_MIN_WORDS = 20
+LANGUAGE_DETECTION_MIN_CONFIDENCE = 0.08
+
+
+def _detect_language(text: str):
+    words = re.findall(r"[a-zà-ÿ]+", text.lower())
+    if len(words) < LANGUAGE_DETECTION_MIN_WORDS:
+        return None, 0.0
+    total = len(words)
+    word_set = set(words)
+    scores = {
+        lang: sum(1 for w in words if w in stopwords) / total
+        for lang, stopwords in LANGUAGE_STOPWORDS.items()
+        if word_set & stopwords
+    }
+    if not scores:
+        return None, 0.0
+    best_lang = max(scores, key=scores.get)
+    return best_lang, scores[best_lang]
+
+
+def check_C107(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """content language auto-detection mismatch (declared vs detected) (Notice · Page)
+    Basic language-detection heuristic: stopword frequency across a
+    handful of major languages (en/es/fr/de/pt/it). Only flags when
+    detection confidence is reasonably high, to avoid false positives on
+    short or mixed-language pages, and only for declared languages we
+    have a stopword list for.
+    """
+    def _has_mismatch(row: pd.Series) -> bool:
+        html = row.get("HTML")
+        declared = _html_lang(html)
+        if not declared:
+            return False
+        declared_primary = declared.split("-")[0]
+        if declared_primary not in LANGUAGE_STOPWORDS:
+            return False
+        if not html:
+            return False
+        soup = BeautifulSoup(str(html), "html.parser")
+        detected_lang, confidence = _detect_language(soup.get_text(" ", strip=True))
+        if not detected_lang or confidence < LANGUAGE_DETECTION_MIN_CONFIDENCE:
+            return False
+        return detected_lang != declared_primary
+
+    mask = pages_df.apply(_has_mismatch, axis=1)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
+
+
+CHECKS = {}

@@ -14,11 +14,11 @@ from checks.architecture import (
 from checks.crawlability import (
     check_C001, check_C002, check_C003, check_C004, check_C005, check_C006, check_C007,
     check_C008, check_C009, check_C010, check_C012, check_C013, check_C014, check_C015,
-    check_C017, check_C018, check_C019, check_C020,
+    check_C016, check_C017, check_C018, check_C019, check_C020,
 )
 from checks.international import (
     check_C096, check_C097, check_C098, check_C099, check_C100, check_C101, check_C102,
-    check_C104, check_C106,
+    check_C103, check_C104, check_C105, check_C106, check_C107,
 )
 from checks.links import (
     check_C082, check_C086, check_C088, check_C089, check_C090, check_C092, check_C093,
@@ -26,10 +26,12 @@ from checks.links import (
 )
 from checks.markup import check_C109, check_C110, check_C111, check_C113, check_C116
 from checks.mobile import check_C129, check_C131, check_C132, check_C134
-from checks.performance import check_C121, check_C122, check_C123, check_C124, check_C125, check_C127
+from checks.performance import (
+    check_C119, check_C121, check_C122, check_C123, check_C124, check_C125, check_C127, check_C128,
+)
 from checks.on_page import check_C042, check_C043, check_C046, check_C047, check_C050, check_C052, check_C058, check_C059, check_C060, check_C061, check_C062, check_C063, check_C064, check_C065
 from checks.redirects import check_C032, check_C034, check_C035, check_C036, check_C037, check_C038, check_C039
-from checks.security import check_C023, check_C024, check_C025, check_C030
+from checks.security import check_C022, check_C023, check_C024, check_C025, check_C026, check_C027, check_C028, check_C030
 
 
 SEVERITY_WEIGHTS = {
@@ -555,6 +557,56 @@ FALLBACK_CHECK_CATALOG = {
         "severity": "Warning",
         "notes": "An hreflang target redirects instead of resolving directly, in the crawled set.",
     },
+    "Conflicting Robots Signals": {
+        "category": "Crawlability & Indexability",
+        "severity": "Warning",
+        "notes": "The X-Robots-Tag header and meta robots tag disagree on noindex/nofollow.",
+    },
+    "HTTP URLs In Sitemap": {
+        "category": "HTTPS & Security",
+        "severity": "Error",
+        "notes": "The sitemap lists http:// URLs instead of https://.",
+    },
+    "SSL Certificate Expired": {
+        "category": "HTTPS & Security",
+        "severity": "Error",
+        "notes": "The site's TLS certificate validity end date has passed.",
+    },
+    "SSL Certificate Expiring Soon": {
+        "category": "HTTPS & Security",
+        "severity": "Warning",
+        "notes": "The site's TLS certificate expires within 30 days.",
+    },
+    "SSL Certificate Hostname Mismatch": {
+        "category": "HTTPS & Security",
+        "severity": "Error",
+        "notes": "The TLS certificate's CN/SAN doesn't match the crawled hostname.",
+    },
+    "Hreflang Cluster Inconsistent": {
+        "category": "International SEO",
+        "severity": "Warning",
+        "notes": "A page's hreflang set doesn't match every other member of its hreflang cluster.",
+    },
+    "Hreflang Sitemap Disagreement": {
+        "category": "International SEO",
+        "severity": "Warning",
+        "notes": "The hreflang set declared in the HTML disagrees with the sitemap's per-URL hreflang annotations.",
+    },
+    "Content Language Mismatch": {
+        "category": "International SEO",
+        "severity": "Notice",
+        "notes": "The declared html lang doesn't match the auto-detected content language.",
+    },
+    "Uncompressed HTML Response": {
+        "category": "Site Performance",
+        "severity": "Warning",
+        "notes": "The response has no gzip/br Content-Encoding.",
+    },
+    "Missing Caching Headers": {
+        "category": "Site Performance",
+        "severity": "Notice",
+        "notes": "The response has no Cache-Control header.",
+    },
     "Thin Content": {
         "category": "On-Page & Duplicates",
         "severity": "Warning",
@@ -694,6 +746,16 @@ CHECK_NAME_TO_CATALOG_ID = {
     "Anchor Text Mismatch": "C075",
     "Unmarked Affiliate Link": "C093",
     "Hreflang Points To Redirect": "C099",
+    "Conflicting Robots Signals": "C016",
+    "HTTP URLs In Sitemap": "C022",
+    "SSL Certificate Expired": "C026",
+    "SSL Certificate Expiring Soon": "C027",
+    "SSL Certificate Hostname Mismatch": "C028",
+    "Hreflang Cluster Inconsistent": "C103",
+    "Hreflang Sitemap Disagreement": "C105",
+    "Content Language Mismatch": "C107",
+    "Uncompressed HTML Response": "C119",
+    "Missing Caching Headers": "C128",
     "Thin Content": "C053",
     "Low Internal Link Support": "C076",
     "Missing Schema": "C108",
@@ -954,6 +1016,16 @@ def build_site_health_report(df: pd.DataFrame, site_ctx: Dict[str, Any] = None) 
     anchor_text_mismatch = check_C075(work_df)
     unmarked_affiliate_link = check_C093(work_df)
     hreflang_points_to_redirect = check_C099(work_df)
+    conflicting_robots_signals = check_C016(work_df)
+    http_urls_in_sitemap = check_C022(work_df, site_ctx=site_ctx)
+    ssl_certificate_expired = check_C026(work_df, site_ctx=site_ctx)
+    ssl_certificate_expiring_soon = check_C027(work_df, site_ctx=site_ctx)
+    ssl_certificate_hostname_mismatch = check_C028(work_df, site_ctx=site_ctx)
+    hreflang_cluster_inconsistent = check_C103(work_df)
+    hreflang_sitemap_disagreement = check_C105(work_df, site_ctx=site_ctx)
+    content_language_mismatch = check_C107(work_df)
+    uncompressed_html_response = check_C119(work_df)
+    missing_caching_headers = check_C128(work_df)
     non_https_pages = work_df[~work_df["URL"].astype(str).str.startswith("https://")][["URL"]].drop_duplicates().reset_index(drop=True)
     redirect_pages = work_df[work_df["Status"].astype(str).str.startswith(("301", "302", "303", "307", "308"))][["URL"]].drop_duplicates().reset_index(drop=True)
     missing_schema = work_df[work_df["Schema"].astype(str).str.strip().eq("")][["URL"]].drop_duplicates().reset_index(drop=True)
@@ -1906,6 +1978,96 @@ def build_site_health_report(df: pd.DataFrame, site_ctx: Dict[str, Any] = None) 
         affected_pages=len(hreflang_points_to_redirect),
         total_pages=total_pages,
         notes=_catalog_reference("Hreflang Points To Redirect")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Conflicting Robots Signals")["category"],
+        check="Conflicting Robots Signals",
+        severity=_catalog_reference("Conflicting Robots Signals")["severity"],
+        affected_pages=len(conflicting_robots_signals),
+        total_pages=total_pages,
+        notes=_catalog_reference("Conflicting Robots Signals")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("HTTP URLs In Sitemap")["category"],
+        check="HTTP URLs In Sitemap",
+        severity=_catalog_reference("HTTP URLs In Sitemap")["severity"],
+        affected_pages=len(http_urls_in_sitemap),
+        total_pages=total_pages,
+        notes=_catalog_reference("HTTP URLs In Sitemap")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("SSL Certificate Expired")["category"],
+        check="SSL Certificate Expired",
+        severity=_catalog_reference("SSL Certificate Expired")["severity"],
+        affected_pages=len(ssl_certificate_expired),
+        total_pages=total_pages,
+        notes=_catalog_reference("SSL Certificate Expired")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("SSL Certificate Expiring Soon")["category"],
+        check="SSL Certificate Expiring Soon",
+        severity=_catalog_reference("SSL Certificate Expiring Soon")["severity"],
+        affected_pages=len(ssl_certificate_expiring_soon),
+        total_pages=total_pages,
+        notes=_catalog_reference("SSL Certificate Expiring Soon")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("SSL Certificate Hostname Mismatch")["category"],
+        check="SSL Certificate Hostname Mismatch",
+        severity=_catalog_reference("SSL Certificate Hostname Mismatch")["severity"],
+        affected_pages=len(ssl_certificate_hostname_mismatch),
+        total_pages=total_pages,
+        notes=_catalog_reference("SSL Certificate Hostname Mismatch")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Hreflang Cluster Inconsistent")["category"],
+        check="Hreflang Cluster Inconsistent",
+        severity=_catalog_reference("Hreflang Cluster Inconsistent")["severity"],
+        affected_pages=len(hreflang_cluster_inconsistent),
+        total_pages=total_pages,
+        notes=_catalog_reference("Hreflang Cluster Inconsistent")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Hreflang Sitemap Disagreement")["category"],
+        check="Hreflang Sitemap Disagreement",
+        severity=_catalog_reference("Hreflang Sitemap Disagreement")["severity"],
+        affected_pages=len(hreflang_sitemap_disagreement),
+        total_pages=total_pages,
+        notes=_catalog_reference("Hreflang Sitemap Disagreement")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Content Language Mismatch")["category"],
+        check="Content Language Mismatch",
+        severity=_catalog_reference("Content Language Mismatch")["severity"],
+        affected_pages=len(content_language_mismatch),
+        total_pages=total_pages,
+        notes=_catalog_reference("Content Language Mismatch")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Uncompressed HTML Response")["category"],
+        check="Uncompressed HTML Response",
+        severity=_catalog_reference("Uncompressed HTML Response")["severity"],
+        affected_pages=len(uncompressed_html_response),
+        total_pages=total_pages,
+        notes=_catalog_reference("Uncompressed HTML Response")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Missing Caching Headers")["category"],
+        check="Missing Caching Headers",
+        severity=_catalog_reference("Missing Caching Headers")["severity"],
+        affected_pages=len(missing_caching_headers),
+        total_pages=total_pages,
+        notes=_catalog_reference("Missing Caching Headers")["notes"],
     )
     _add_finding(
         findings,

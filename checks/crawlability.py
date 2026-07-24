@@ -234,11 +234,23 @@ def check_C015(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C016(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C016(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """conflicting robots signals (meta vs X-Robots-Tag) (Warning · Page)
-    HTTP header and HTML meta robots disagree.
+    HTTP header and HTML meta robots disagree. Compares only the
+    noindex/nofollow directives specifically.
     """
-    raise NotImplementedError("C016 not yet implemented")
+    if "X-Robots-Tag" not in pages_df.columns:
+        return pages_df.iloc[0:0][["URL"]]
+
+    def _conflicts(row: pd.Series) -> bool:
+        header_value = str(row.get("X-Robots-Tag", "") or "").lower()
+        if not header_value:
+            return False
+        meta_value = _robots_meta_content(row.get("HTML"))
+        return any((directive in header_value) != (directive in meta_value) for directive in ("noindex", "nofollow"))
+
+    mask = pages_df.apply(_conflicts, axis=1)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C017(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
@@ -326,5 +338,4 @@ def check_C020(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
 
 CHECKS = {
     "C011": check_C011,
-    "C016": check_C016,
 }

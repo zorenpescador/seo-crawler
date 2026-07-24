@@ -2,19 +2,25 @@
 
 See checks/crawlability.py for the pattern these stubs follow.
 """
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
 import pandas as pd
 from bs4 import BeautifulSoup
 
 MIXED_CONTENT_TAG_ATTRS = (("img", "src"), ("script", "src"), ("link", "href"))
+SSL_EXPIRY_WARNING_DAYS = 30
 
 
-def check_C022(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C022(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """HTTP URLs present in sitemap (Error · Site)
     Sitemap lists http:// instead of https://.
     """
-    raise NotImplementedError("C022 not yet implemented")
+    site_ctx = site_ctx or {}
+    sitemap_urls = site_ctx.get("sitemap_urls") or []
+    if any(str(u).startswith("http://") for u in sitemap_urls):
+        return pages_df[["URL"]].drop_duplicates().reset_index(drop=True)
+    return pages_df.iloc[0:0][["URL"]]
 
 
 def _has_mixed_content(row: pd.Series) -> bool:
@@ -69,25 +75,44 @@ def check_C025(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C026(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C026(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """SSL certificate expired (Error · Site)
-    Certificate validity end date has passed.
+    Certificate validity end date has passed. An expired cert fails the
+    handshake before notAfter can be read, so this relies on the
+    "expired" flag classified from the handshake's own error message.
     """
-    raise NotImplementedError("C026 not yet implemented")
+    site_ctx = site_ctx or {}
+    ssl_info = site_ctx.get("ssl_info") or {}
+    not_after = ssl_info.get("not_after")
+    is_expired = ssl_info.get("expired") or (not_after and not_after < datetime.now(timezone.utc))
+    if is_expired:
+        return pages_df[["URL"]].drop_duplicates().reset_index(drop=True)
+    return pages_df.iloc[0:0][["URL"]]
 
 
-def check_C027(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C027(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """SSL certificate expiring soon (<30 days) (Warning · Site)
     Certificate nearing expiry.
     """
-    raise NotImplementedError("C027 not yet implemented")
+    site_ctx = site_ctx or {}
+    not_after = (site_ctx.get("ssl_info") or {}).get("not_after")
+    if not not_after:
+        return pages_df.iloc[0:0][["URL"]]
+    now = datetime.now(timezone.utc)
+    if now <= not_after < now + timedelta(days=SSL_EXPIRY_WARNING_DAYS):
+        return pages_df[["URL"]].drop_duplicates().reset_index(drop=True)
+    return pages_df.iloc[0:0][["URL"]]
 
 
-def check_C028(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C028(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """SSL certificate hostname mismatch (Error · Site)
     Cert CN/SAN doesn't match requested host.
     """
-    raise NotImplementedError("C028 not yet implemented")
+    site_ctx = site_ctx or {}
+    ssl_info = site_ctx.get("ssl_info") or {}
+    if ssl_info.get("checked") and ssl_info.get("hostname_matches") is False:
+        return pages_df[["URL"]].drop_duplicates().reset_index(drop=True)
+    return pages_df.iloc[0:0][["URL"]]
 
 
 def check_C029(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -116,9 +141,5 @@ def check_C030(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
 
 
 CHECKS = {
-    "C022": check_C022,
-    "C026": check_C026,
-    "C027": check_C027,
-    "C028": check_C028,
     "C029": check_C029,
 }

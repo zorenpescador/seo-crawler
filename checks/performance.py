@@ -12,9 +12,14 @@ from bs4 import BeautifulSoup
 LEGACY_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".bmp")
 
 
-def check_C119(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C119(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """uncompressed HTML response (no gzip/br Content-Encoding) (Warning · Page)"""
-    raise NotImplementedError("C119 not yet implemented")
+    if "Content-Encoding" not in pages_df.columns:
+        return pages_df.iloc[0:0][["URL"]]
+    mask = pages_df["Content-Encoding"].fillna("").astype(str).str.strip().eq("")
+    if "Crawl Status" in pages_df.columns:
+        mask = mask & pages_df["Crawl Status"].astype(str).eq("Success")
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C120(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -145,16 +150,21 @@ def check_C127(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[counts.gt(DOM_SIZE_MAX_NODES), ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C128(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C128(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """favicon/static asset caching headers missing (Notice · Page)
-    Cache-Control absent on static resources.
+    Cache-Control absent on static resources. Proxy: uses the page's own
+    Cache-Control header, since the crawler doesn't separately request
+    static assets (images/CSS/JS/favicon) to read their own headers.
     """
-    raise NotImplementedError("C128 not yet implemented")
+    if "Cache-Control" not in pages_df.columns:
+        return pages_df.iloc[0:0][["URL"]]
+    mask = pages_df["Cache-Control"].fillna("").astype(str).str.strip().eq("")
+    if "Crawl Status" in pages_df.columns:
+        mask = mask & pages_df["Crawl Status"].astype(str).eq("Success")
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 CHECKS = {
-    "C119": check_C119,
     "C120": check_C120,
     "C126": check_C126,
-    "C128": check_C128,
 }
