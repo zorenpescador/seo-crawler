@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 import pandas as pd
 from bs4 import BeautifulSoup
 
-from checks.on_page import check_C042, check_C043, check_C046, check_C047, check_C050, check_C052, check_C059, check_C061, check_C062, check_C064, check_C065
+from checks.on_page import check_C042, check_C043, check_C046, check_C047, check_C050, check_C052, check_C058, check_C059, check_C061, check_C062, check_C064, check_C065
 
 
 SEVERITY_WEIGHTS = {
@@ -153,6 +153,11 @@ FALLBACK_CHECK_CATALOG = {
         "severity": "Notice",
         "notes": "URLs have more than 3 query parameters, a duplicate-content risk.",
     },
+    "Low Text-to-HTML Ratio": {
+        "category": "On-Page & Duplicates",
+        "severity": "Notice",
+        "notes": "Pages are markup-heavy relative to visible text.",
+    },
     "Thin Content": {
         "category": "On-Page & Duplicates",
         "severity": "Warning",
@@ -216,6 +221,7 @@ CHECK_NAME_TO_CATALOG_ID = {
     "URL Contains Uppercase": "C065",
     "URL Contains Underscores": "C064",
     "URL Excessive Parameters": "C061",
+    "Low Text-to-HTML Ratio": "C058",
     "Thin Content": "C053",
     "Low Internal Link Support": "C076",
     "Missing Schema": "C108",
@@ -400,6 +406,7 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
     url_uppercase = check_C065(work_df)
     url_underscores = check_C064(work_df)
     url_excessive_params = check_C061(work_df)
+    low_text_ratio = check_C058(work_df)
     thin_content = work_df[work_df["Word Count"].astype(int) < 300][["URL"]].drop_duplicates().reset_index(drop=True)
     slow_pages = work_df[work_df["Crawl Time (s)"].astype(float) > 2.5][["URL"]].drop_duplicates().reset_index(drop=True)
     non_https_pages = work_df[~work_df["URL"].astype(str).str.startswith("https://")][["URL"]].drop_duplicates().reset_index(drop=True)
@@ -622,6 +629,15 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
         affected_pages=len(url_excessive_params),
         total_pages=total_pages,
         notes=_catalog_reference("URL Excessive Parameters")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Low Text-to-HTML Ratio")["category"],
+        check="Low Text-to-HTML Ratio",
+        severity=_catalog_reference("Low Text-to-HTML Ratio")["severity"],
+        affected_pages=len(low_text_ratio),
+        total_pages=total_pages,
+        notes=_catalog_reference("Low Text-to-HTML Ratio")["notes"],
     )
     _add_finding(
         findings,

@@ -89,11 +89,27 @@ def check_C057(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C057 not yet implemented")
 
 
-def check_C058(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+TEXT_TO_HTML_RATIO_MIN = 0.10
+
+
+def _text_to_html_ratio(html: Any) -> float:
+    html_str = str(html) if html else ""
+    if not html_str:
+        return 1.0
+    soup = BeautifulSoup(html_str, "html.parser")
+    for tag in soup(["script", "style", "noscript"]):
+        tag.decompose()
+    text_length = len(soup.get_text(" ", strip=True))
+    return text_length / len(html_str)
+
+
+def check_C058(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """low text-to-HTML ratio (Notice · Page)
-    Page is markup-heavy relative to visible text.
+    Page is markup-heavy relative to visible text. Pages with no HTML
+    (crawl failures, handled by C014) are excluded rather than flagged.
     """
-    raise NotImplementedError("C058 not yet implemented")
+    ratios = pages_df["HTML"].fillna("").apply(_text_to_html_ratio)
+    return pages_df.loc[ratios.lt(TEXT_TO_HTML_RATIO_MIN), ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def _has_lang_attribute(html: Any) -> bool:
@@ -162,7 +178,6 @@ def check_C065(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
 CHECKS = {
     "C055": check_C055,
     "C057": check_C057,
-    "C058": check_C058,
     "C060": check_C060,
     "C063": check_C063,
 }
