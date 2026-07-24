@@ -123,11 +123,15 @@ def check_C013(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C014(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C014(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """page not crawlable (timeout/DNS/conn error) (Error · Page)
-    Request failed outright.
+    Request failed outright. Distinct from an HTTP 4XX/5XX response,
+    which the crawler records separately as "HTTP Error".
     """
-    raise NotImplementedError("C014 not yet implemented")
+    if "Crawl Status" not in pages_df.columns:
+        return pages_df.iloc[0:0][["URL"]]
+    mask = pages_df["Crawl Status"].astype(str).str.startswith("Error")
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C015(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
@@ -154,11 +158,25 @@ def check_C016(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C016 not yet implemented")
 
 
-def check_C017(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C017(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """canonical points to a blocked/noindex page (Error · Page)
-    Canonical target is itself non-indexable.
+    Canonical target is itself non-indexable. Only checks noindex (via
+    meta robots) against targets in the crawled set; robots.txt-blocked
+    targets aren't detectable from crawled data alone.
     """
-    raise NotImplementedError("C017 not yet implemented")
+    noindex_urls = set(
+        pages_df.loc[
+            pages_df["HTML"].fillna("").apply(lambda html: "noindex" in _robots_meta_content(html)), "URL"
+        ].astype(str)
+    )
+
+    def _points_to_noindex(row: pd.Series) -> bool:
+        canonical = str(row.get("Canonical URL", "")).strip()
+        own_url = str(row.get("URL", "")).strip()
+        return bool(canonical) and canonical != own_url and canonical in noindex_urls
+
+    mask = pages_df.apply(_points_to_noindex, axis=1)
+    return pages_df.loc[mask, ["URL", "Canonical URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def _canonical_cross_domain(row: pd.Series) -> bool:
@@ -178,18 +196,49 @@ def check_C018(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL", "Canonical URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C019(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C019(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """canonical chain (canonical points to a page with its own different canonical) (Warning · Page)
-    Canonical does not resolve to a stable target.
+    Canonical does not resolve to a stable target. Only detectable when
+    the chained-to page is itself in the crawled set.
     """
-    raise NotImplementedError("C019 not yet implemented")
+    canonical_map = dict(zip(pages_df["URL"].astype(str), pages_df["Canonical URL"].astype(str)))
+
+    def _is_chain(row: pd.Series) -> bool:
+        own_url = str(row.get("URL", "")).strip()
+        target = str(row.get("Canonical URL", "")).strip()
+        if not target or target == own_url:
+            return False
+        target_canonical = canonical_map.get(target, "").strip()
+        return bool(target_canonical) and target_canonical != target
+
+    mask = pages_df.apply(_is_chain, axis=1)
+    return pages_df.loc[mask, ["URL", "Canonical URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C020(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+PAGINATION_URL_PATTERN = re.compile(r"[?&](?:page|p)=\d+|/page/\d+", re.IGNORECASE)
+
+
+def _has_pagination_rel(html: Any) -> bool:
+    if not html:
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    return bool(soup.find("link", attrs={"rel": re.compile(r"\b(next|prev)\b", re.IGNORECASE)}))
+
+
+def check_C020(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """paginated page missing rel=next/prev or self-canonical (Notice · Page)
-    Pagination signals absent.
+    Pagination signals absent. Heuristic: URL looks like a pagination page
+    (?page=2, /page/2) but has neither rel=next/prev nor a self-canonical.
     """
-    raise NotImplementedError("C020 not yet implemented")
+    is_paginated = pages_df["URL"].astype(str).str.contains(PAGINATION_URL_PATTERN)
+    has_pagination_rel = pages_df["HTML"].fillna("").apply(_has_pagination_rel)
+    has_self_canonical = pages_df.apply(
+        lambda row: str(row.get("Canonical URL", "")).strip() != ""
+        and str(row.get("Canonical URL", "")).strip() == str(row.get("URL", "")).strip(),
+        axis=1,
+    )
+    mask = is_paginated & ~has_pagination_rel & ~has_self_canonical
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 CHECKS = {
@@ -204,9 +253,5 @@ CHECKS = {
     "C009": check_C009,
     "C010": check_C010,
     "C011": check_C011,
-    "C014": check_C014,
     "C016": check_C016,
-    "C017": check_C017,
-    "C019": check_C019,
-    "C020": check_C020,
 }

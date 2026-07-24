@@ -25,16 +25,51 @@ def check_C129(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C131(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """empty alt attribute on a non-decorative image (heuristic) (Notice · Page)"""
-    raise NotImplementedError("C131 not yet implemented")
+def _has_empty_alt_present(html: Any) -> bool:
+    if not html:
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    for img in soup.find_all("img"):
+        if img.has_attr("alt") and not img["alt"].strip():
+            return True
+    return False
 
 
-def check_C132(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """tap targets likely too small/close (heuristic: many inline <a> in dense text) (Notice · Page)
-    Best-effort heuristic, not a full a11y audit.
+def check_C131(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """empty alt attribute on a non-decorative image (heuristic) (Notice · Page)
+    Distinct from Images Missing Alt Text (C130), which covers both a
+    missing attribute and an empty one; this specifically flags images
+    that explicitly carry alt="" (a valid pattern for decorative images,
+    but a heuristic risk when used on content images).
     """
-    raise NotImplementedError("C132 not yet implemented")
+    mask = pages_df["HTML"].fillna("").apply(_has_empty_alt_present)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
+
+
+TAP_TARGET_LINKS_PER_100_WORDS_MAX = 8
+TAP_TARGET_LINK_COUNT_MIN = 10
+
+
+def check_C132(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """tap targets likely too small/close (heuristic: many inline <a> in dense text) (Notice · Page)
+    Best-effort heuristic, not a full a11y audit: flags pages with a high
+    density of inline links relative to word count.
+    """
+    def _is_dense(row: pd.Series) -> bool:
+        html = row.get("HTML")
+        if not html:
+            return False
+        word_count = int(row.get("Word Count") or 0)
+        if word_count <= 0:
+            return False
+        soup = BeautifulSoup(str(html), "html.parser")
+        link_count = len(soup.find_all("a"))
+        if link_count < TAP_TARGET_LINK_COUNT_MIN:
+            return False
+        return (link_count / word_count) * 100 > TAP_TARGET_LINKS_PER_100_WORDS_MAX
+
+    mask = pages_df.apply(_is_dense, axis=1)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C133(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -81,8 +116,6 @@ def check_C135(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
 
 
 CHECKS = {
-    "C131": check_C131,
-    "C132": check_C132,
     "C133": check_C133,
     "C135": check_C135,
 }

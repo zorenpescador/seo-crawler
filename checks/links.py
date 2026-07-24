@@ -91,16 +91,57 @@ def check_C088(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL", "Canonical URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C089(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def _hreflang_targets(html: Any) -> Dict[str, str]:
+    if not html:
+        return {}
+    soup = BeautifulSoup(str(html), "html.parser")
+    targets = {}
+    for link in soup.find_all("link", attrs={"hreflang": True}):
+        rel = link.get("rel") or []
+        rel_str = " ".join(rel) if isinstance(rel, list) else str(rel)
+        if "alternate" not in rel_str.lower():
+            continue
+        href = str(link.get("href", "")).strip()
+        if href:
+            targets[href] = str(link.get("hreflang", "")).strip()
+    return targets
+
+
+def check_C089(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """broken hreflang target (Error · Page)
-    See International SEO category for full hreflang set.
+    Only catches targets that are themselves in the crawled URL set.
     """
-    raise NotImplementedError("C089 not yet implemented")
+    status_map = dict(zip(pages_df["URL"].astype(str), pages_df["Status"].astype(str)))
+
+    def _has_broken_hreflang(html: Any) -> bool:
+        for href in _hreflang_targets(html):
+            status = status_map.get(href)
+            if status and status.startswith(("4", "5")):
+                return True
+        return False
+
+    mask = pages_df["HTML"].fillna("").apply(_has_broken_hreflang)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C090(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+TRACKING_PARAM_NAMES = {"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "fbclid", "gclid", "msclkid"}
+
+
+def _has_tracking_param_link(html: Any) -> bool:
+    if not html:
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    for a in soup.find_all("a", href=True):
+        query = urlparse(a["href"]).query.lower()
+        if any(f"{param}=" in query for param in TRACKING_PARAM_NAMES):
+            return True
+    return False
+
+
+def check_C090(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """link to a URL with tracking parameters not canonicalized (Notice · Page)"""
-    raise NotImplementedError("C090 not yet implemented")
+    mask = pages_df["HTML"].fillna("").apply(_has_tracking_param_link)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C091(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -189,8 +230,6 @@ CHECKS = {
     "C084": check_C084,
     "C085": check_C085,
     "C087": check_C087,
-    "C089": check_C089,
-    "C090": check_C090,
     "C091": check_C091,
     "C093": check_C093,
 }

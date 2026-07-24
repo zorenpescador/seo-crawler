@@ -4,6 +4,8 @@ health_score.py already implements orphan pages and low-internal-link-support.
 These stubs cover the rest of the category. See checks/crawlability.py for
 the pattern.
 """
+import re
+from collections import deque
 from typing import Any, Dict, List
 from urllib.parse import urljoin, urlparse
 
@@ -39,18 +41,49 @@ def _internal_links(html: Any, page_url: Any) -> List[Dict[str, Any]]:
     return links
 
 
-def check_C067(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """page more than 3 clicks from homepage (Warning · Site)
-    Crawl-depth graph analysis.
+def _click_depths(pages_df: pd.DataFrame) -> Dict[str, int]:
+    """BFS click-depth from an inferred homepage over the internal-link graph.
+
+    The homepage is the crawled URL with the shortest path (ties broken
+    arbitrarily); if the crawl has no pages, depth is undefined.
     """
-    raise NotImplementedError("C067 not yet implemented")
+    urls = set(pages_df["URL"].astype(str))
+    if not urls:
+        return {}
+    graph = {
+        str(row["URL"]): {link["href"] for link in _internal_links(row.get("HTML"), row.get("URL"))}
+        for _, row in pages_df.iterrows()
+    }
+    homepage = min(urls, key=lambda u: len(urlparse(u).path.strip("/")))
+    depths = {homepage: 0}
+    queue = deque([homepage])
+    while queue:
+        current = queue.popleft()
+        for neighbor in graph.get(current, set()):
+            if neighbor in urls and neighbor not in depths:
+                depths[neighbor] = depths[current] + 1
+                queue.append(neighbor)
+    return depths
 
 
-def check_C068(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C067(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """page more than 3 clicks from homepage (Warning · Site)
+    Crawl-depth graph analysis. Only covers pages reachable from the
+    inferred homepage within the crawled set; unreachable pages are
+    already covered by Orphan Pages.
+    """
+    depths = _click_depths(pages_df)
+    affected = {url for url, depth in depths.items() if depth > 3}
+    return pages_df[pages_df["URL"].astype(str).isin(affected)][["URL"]].drop_duplicates().reset_index(drop=True)
+
+
+def check_C068(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """page more than 5 clicks from homepage (Error · Site)
     Severe depth.
     """
-    raise NotImplementedError("C068 not yet implemented")
+    depths = _click_depths(pages_df)
+    affected = {url for url, depth in depths.items() if depth > 5}
+    return pages_df[pages_df["URL"].astype(str).isin(affected)][["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C069(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -133,21 +166,76 @@ def check_C075(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C075 not yet implemented")
 
 
-def check_C077(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+LINK_COUNT_ANOMALY_RATIO = 0.3
+LINK_COUNT_ANOMALY_MIN_PAGES = 5
+
+
+def check_C077(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """navigation/footer link count anomaly vs sitewide pattern (Notice · Site)
-    Outlier page missing standard nav.
+    Outlier page missing standard nav. Heuristic: total link count under
+    30% of the sitewide median (requires at least 5 crawled pages).
     """
-    raise NotImplementedError("C077 not yet implemented")
+    if len(pages_df) < LINK_COUNT_ANOMALY_MIN_PAGES:
+        return pages_df.iloc[0:0][["URL"]]
+    counts = pages_df.apply(lambda row: len(_internal_links(row.get("HTML"), row.get("URL"))), axis=1)
+    median = counts.median()
+    if median <= 0:
+        return pages_df.iloc[0:0][["URL"]]
+    mask = counts < (median * LINK_COUNT_ANOMALY_RATIO)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C078(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """breadcrumb missing on deep page (Notice · Page)"""
-    raise NotImplementedError("C078 not yet implemented")
+BREADCRUMB_DEPTH_MIN = 3
 
 
-def check_C079(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """pagination series missing links to first/last page (Notice · Page)"""
-    raise NotImplementedError("C079 not yet implemented")
+def _has_breadcrumb(html: Any) -> bool:
+    if not html:
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    if soup.find(attrs={"aria-label": re.compile("breadcrumb", re.IGNORECASE)}):
+        return True
+    if soup.find(class_=re.compile("breadcrumb", re.IGNORECASE)):
+        return True
+    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        content = script.string or script.get_text()
+        if content and "BreadcrumbList" in content:
+            return True
+    return False
+
+
+def check_C078(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """breadcrumb missing on deep page (Notice · Page)
+    "Deep" is defined as more than 2 clicks from the inferred homepage.
+    """
+    depths = _click_depths(pages_df)
+    deep_urls = {url for url, depth in depths.items() if depth > BREADCRUMB_DEPTH_MIN - 1}
+
+    def _is_deep_without_breadcrumb(row: pd.Series) -> bool:
+        return str(row.get("URL", "")) in deep_urls and not _has_breadcrumb(row.get("HTML"))
+
+    mask = pages_df.apply(_is_deep_without_breadcrumb, axis=1)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
+
+
+def _has_rel(html: Any, rel_name: str) -> bool:
+    if not html:
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    return bool(soup.find("link", attrs={"rel": re.compile(rf"\b{rel_name}\b", re.IGNORECASE)}))
+
+
+def check_C079(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """pagination series missing links to first/last page (Notice · Page)
+    Only applies to pages already identified as part of a pagination
+    series (i.e. carrying rel=next or rel=prev).
+    """
+    def _missing_first_or_last(html: Any) -> bool:
+        if not (_has_rel(html, "next") or _has_rel(html, "prev")):
+            return False
+        return not (_has_rel(html, "first") or _has_rel(html, "last"))
+
+    mask = pages_df["HTML"].fillna("").apply(_missing_first_or_last)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C080(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -156,12 +244,7 @@ def check_C080(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
 
 
 CHECKS = {
-    "C067": check_C067,
-    "C068": check_C068,
     "C069": check_C069,
     "C075": check_C075,
-    "C077": check_C077,
-    "C078": check_C078,
-    "C079": check_C079,
     "C080": check_C080,
 }

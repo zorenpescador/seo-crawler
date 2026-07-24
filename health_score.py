@@ -7,13 +7,18 @@ from typing import Any, Dict, List
 import pandas as pd
 from bs4 import BeautifulSoup
 
-from checks.architecture import check_C070, check_C071, check_C072, check_C073, check_C074
-from checks.crawlability import check_C012, check_C013, check_C015, check_C018
-from checks.international import check_C096, check_C101, check_C102, check_C106
-from checks.links import check_C082, check_C086, check_C088, check_C092, check_C094, check_C095
-from checks.markup import check_C109, check_C113, check_C116
-from checks.mobile import check_C129, check_C134
-from checks.performance import check_C121, check_C122, check_C123, check_C124, check_C127
+from checks.architecture import (
+    check_C067, check_C068, check_C070, check_C071, check_C072, check_C073, check_C074,
+    check_C077, check_C078, check_C079,
+)
+from checks.crawlability import check_C012, check_C013, check_C014, check_C015, check_C017, check_C018, check_C019, check_C020
+from checks.international import (
+    check_C096, check_C097, check_C098, check_C100, check_C101, check_C102, check_C104, check_C106,
+)
+from checks.links import check_C082, check_C086, check_C088, check_C089, check_C090, check_C092, check_C094, check_C095
+from checks.markup import check_C109, check_C110, check_C111, check_C113, check_C116
+from checks.mobile import check_C129, check_C131, check_C132, check_C134
+from checks.performance import check_C121, check_C122, check_C123, check_C124, check_C125, check_C127
 from checks.on_page import check_C042, check_C043, check_C046, check_C047, check_C050, check_C052, check_C058, check_C059, check_C060, check_C061, check_C062, check_C063, check_C064, check_C065
 from checks.redirects import check_C036, check_C037, check_C038
 from checks.security import check_C023
@@ -342,6 +347,106 @@ FALLBACK_CHECK_CATALOG = {
         "severity": "Warning",
         "notes": "Pages declare the same hreflang language/region code more than once.",
     },
+    "Not Crawlable": {
+        "category": "Crawlability & Indexability",
+        "severity": "Error",
+        "notes": "The request itself failed (timeout/DNS/connection error), not an HTTP error status.",
+    },
+    "Canonical Points To Noindex": {
+        "category": "Crawlability & Indexability",
+        "severity": "Error",
+        "notes": "The canonical target carries a meta robots noindex directive.",
+    },
+    "Canonical Chain": {
+        "category": "Crawlability & Indexability",
+        "severity": "Warning",
+        "notes": "The canonical target has its own different canonical, so it doesn't resolve to a stable page.",
+    },
+    "Pagination Signals Missing": {
+        "category": "Crawlability & Indexability",
+        "severity": "Notice",
+        "notes": "A paginated-looking URL has neither rel=next/prev nor a self-referencing canonical.",
+    },
+    "Excessive Click Depth": {
+        "category": "Site Architecture & Internal Linking",
+        "severity": "Warning",
+        "notes": "Pages are more than 3 clicks from the homepage.",
+    },
+    "Severe Click Depth": {
+        "category": "Site Architecture & Internal Linking",
+        "severity": "Error",
+        "notes": "Pages are more than 5 clicks from the homepage.",
+    },
+    "Navigation Link Count Anomaly": {
+        "category": "Site Architecture & Internal Linking",
+        "severity": "Notice",
+        "notes": "A page's total link count is far below the sitewide median, suggesting missing standard navigation.",
+    },
+    "Breadcrumb Missing On Deep Page": {
+        "category": "Site Architecture & Internal Linking",
+        "severity": "Notice",
+        "notes": "Pages more than 2 clicks deep have no breadcrumb markup.",
+    },
+    "Pagination Missing First/Last": {
+        "category": "Site Architecture & Internal Linking",
+        "severity": "Notice",
+        "notes": "Pages in a pagination series (rel=next/prev) have no link to the first or last page.",
+    },
+    "Broken Hreflang Target": {
+        "category": "Links",
+        "severity": "Error",
+        "notes": "An hreflang link points to a URL that returns a 4XX/5XX status in the crawled set.",
+    },
+    "Tracking Parameters In Link": {
+        "category": "Links",
+        "severity": "Notice",
+        "notes": "Pages link to a URL carrying tracking parameters (utm_*, fbclid, gclid, etc.) that isn't canonicalized.",
+    },
+    "Hreflang Missing Return Link": {
+        "category": "International SEO",
+        "severity": "Error",
+        "notes": "A hreflang target doesn't link back to the page that references it.",
+    },
+    "Hreflang Points To Non-Canonical": {
+        "category": "International SEO",
+        "severity": "Warning",
+        "notes": "An hreflang target has its own different canonical URL.",
+    },
+    "Hreflang Points To Broken URL": {
+        "category": "International SEO",
+        "severity": "Error",
+        "notes": "An hreflang link points to a URL that returns a 4XX/5XX status in the crawled set.",
+    },
+    "Hreflang Language Conflict": {
+        "category": "International SEO",
+        "severity": "Notice",
+        "notes": "The html lang attribute disagrees with the page's own hreflang self-reference.",
+    },
+    "Structured Data Missing Fields": {
+        "category": "Markup & Structured Data",
+        "severity": "Warning",
+        "notes": "Structured data is missing fields normally required for its declared @type.",
+    },
+    "Structured Data Type Mismatch": {
+        "category": "Markup & Structured Data",
+        "severity": "Notice",
+        "notes": "A Product schema type is declared on a page with no images.",
+    },
+    "Unlazy Below-Fold Images": {
+        "category": "Site Performance",
+        "severity": "Notice",
+        "notes": "Images beyond the first in document order have no loading=lazy attribute.",
+    },
+    "Empty Alt Attribute": {
+        "category": "Mobile & Accessibility",
+        "severity": "Notice",
+        "notes": "Images explicitly carry alt=\"\", valid for decorative images but risky on content images.",
+    },
+    "Dense Tap Targets": {
+        "category": "Mobile & Accessibility",
+        "severity": "Notice",
+        "notes": "Pages have a high density of inline links relative to word count, a tap-target risk.",
+    },
     "Thin Content": {
         "category": "On-Page & Duplicates",
         "severity": "Warning",
@@ -441,6 +546,26 @@ CHECK_NAME_TO_CATALOG_ID = {
     "Multiple X-Default Hreflang": "C101",
     "Missing X-Default Hreflang": "C102",
     "Duplicate Hreflang": "C106",
+    "Not Crawlable": "C014",
+    "Canonical Points To Noindex": "C017",
+    "Canonical Chain": "C019",
+    "Pagination Signals Missing": "C020",
+    "Excessive Click Depth": "C067",
+    "Severe Click Depth": "C068",
+    "Navigation Link Count Anomaly": "C077",
+    "Breadcrumb Missing On Deep Page": "C078",
+    "Pagination Missing First/Last": "C079",
+    "Broken Hreflang Target": "C089",
+    "Tracking Parameters In Link": "C090",
+    "Hreflang Missing Return Link": "C097",
+    "Hreflang Points To Non-Canonical": "C098",
+    "Hreflang Points To Broken URL": "C100",
+    "Hreflang Language Conflict": "C104",
+    "Structured Data Missing Fields": "C110",
+    "Structured Data Type Mismatch": "C111",
+    "Unlazy Below-Fold Images": "C125",
+    "Empty Alt Attribute": "C131",
+    "Dense Tap Targets": "C132",
     "Thin Content": "C053",
     "Low Internal Link Support": "C076",
     "Missing Schema": "C108",
@@ -660,6 +785,26 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
     multiple_x_default_hreflang = check_C101(work_df)
     missing_x_default_hreflang = check_C102(work_df)
     duplicate_hreflang = check_C106(work_df)
+    not_crawlable = check_C014(work_df)
+    canonical_points_to_noindex = check_C017(work_df)
+    canonical_chain = check_C019(work_df)
+    pagination_signals_missing = check_C020(work_df)
+    excessive_click_depth = check_C067(work_df)
+    severe_click_depth = check_C068(work_df)
+    navigation_link_count_anomaly = check_C077(work_df)
+    breadcrumb_missing_on_deep_page = check_C078(work_df)
+    pagination_missing_first_last = check_C079(work_df)
+    broken_hreflang_target = check_C089(work_df)
+    tracking_parameters_in_link = check_C090(work_df)
+    hreflang_missing_return_link = check_C097(work_df)
+    hreflang_points_to_non_canonical = check_C098(work_df)
+    hreflang_points_to_broken_url = check_C100(work_df)
+    hreflang_language_conflict = check_C104(work_df)
+    structured_data_missing_fields = check_C110(work_df)
+    structured_data_type_mismatch = check_C111(work_df)
+    unlazy_below_fold_images = check_C125(work_df)
+    empty_alt_attribute = check_C131(work_df)
+    dense_tap_targets = check_C132(work_df)
     non_https_pages = work_df[~work_df["URL"].astype(str).str.startswith("https://")][["URL"]].drop_duplicates().reset_index(drop=True)
     redirect_pages = work_df[work_df["Status"].astype(str).str.startswith(("301", "302", "303", "307", "308"))][["URL"]].drop_duplicates().reset_index(drop=True)
     missing_schema = work_df[work_df["Schema"].astype(str).str.strip().eq("")][["URL"]].drop_duplicates().reset_index(drop=True)
@@ -1252,6 +1397,186 @@ def build_site_health_report(df: pd.DataFrame) -> Dict[str, Any]:
         affected_pages=len(duplicate_hreflang),
         total_pages=total_pages,
         notes=_catalog_reference("Duplicate Hreflang")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Not Crawlable")["category"],
+        check="Not Crawlable",
+        severity=_catalog_reference("Not Crawlable")["severity"],
+        affected_pages=len(not_crawlable),
+        total_pages=total_pages,
+        notes=_catalog_reference("Not Crawlable")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Canonical Points To Noindex")["category"],
+        check="Canonical Points To Noindex",
+        severity=_catalog_reference("Canonical Points To Noindex")["severity"],
+        affected_pages=len(canonical_points_to_noindex),
+        total_pages=total_pages,
+        notes=_catalog_reference("Canonical Points To Noindex")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Canonical Chain")["category"],
+        check="Canonical Chain",
+        severity=_catalog_reference("Canonical Chain")["severity"],
+        affected_pages=len(canonical_chain),
+        total_pages=total_pages,
+        notes=_catalog_reference("Canonical Chain")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Pagination Signals Missing")["category"],
+        check="Pagination Signals Missing",
+        severity=_catalog_reference("Pagination Signals Missing")["severity"],
+        affected_pages=len(pagination_signals_missing),
+        total_pages=total_pages,
+        notes=_catalog_reference("Pagination Signals Missing")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Excessive Click Depth")["category"],
+        check="Excessive Click Depth",
+        severity=_catalog_reference("Excessive Click Depth")["severity"],
+        affected_pages=len(excessive_click_depth),
+        total_pages=total_pages,
+        notes=_catalog_reference("Excessive Click Depth")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Severe Click Depth")["category"],
+        check="Severe Click Depth",
+        severity=_catalog_reference("Severe Click Depth")["severity"],
+        affected_pages=len(severe_click_depth),
+        total_pages=total_pages,
+        notes=_catalog_reference("Severe Click Depth")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Navigation Link Count Anomaly")["category"],
+        check="Navigation Link Count Anomaly",
+        severity=_catalog_reference("Navigation Link Count Anomaly")["severity"],
+        affected_pages=len(navigation_link_count_anomaly),
+        total_pages=total_pages,
+        notes=_catalog_reference("Navigation Link Count Anomaly")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Breadcrumb Missing On Deep Page")["category"],
+        check="Breadcrumb Missing On Deep Page",
+        severity=_catalog_reference("Breadcrumb Missing On Deep Page")["severity"],
+        affected_pages=len(breadcrumb_missing_on_deep_page),
+        total_pages=total_pages,
+        notes=_catalog_reference("Breadcrumb Missing On Deep Page")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Pagination Missing First/Last")["category"],
+        check="Pagination Missing First/Last",
+        severity=_catalog_reference("Pagination Missing First/Last")["severity"],
+        affected_pages=len(pagination_missing_first_last),
+        total_pages=total_pages,
+        notes=_catalog_reference("Pagination Missing First/Last")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Broken Hreflang Target")["category"],
+        check="Broken Hreflang Target",
+        severity=_catalog_reference("Broken Hreflang Target")["severity"],
+        affected_pages=len(broken_hreflang_target),
+        total_pages=total_pages,
+        notes=_catalog_reference("Broken Hreflang Target")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Tracking Parameters In Link")["category"],
+        check="Tracking Parameters In Link",
+        severity=_catalog_reference("Tracking Parameters In Link")["severity"],
+        affected_pages=len(tracking_parameters_in_link),
+        total_pages=total_pages,
+        notes=_catalog_reference("Tracking Parameters In Link")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Hreflang Missing Return Link")["category"],
+        check="Hreflang Missing Return Link",
+        severity=_catalog_reference("Hreflang Missing Return Link")["severity"],
+        affected_pages=len(hreflang_missing_return_link),
+        total_pages=total_pages,
+        notes=_catalog_reference("Hreflang Missing Return Link")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Hreflang Points To Non-Canonical")["category"],
+        check="Hreflang Points To Non-Canonical",
+        severity=_catalog_reference("Hreflang Points To Non-Canonical")["severity"],
+        affected_pages=len(hreflang_points_to_non_canonical),
+        total_pages=total_pages,
+        notes=_catalog_reference("Hreflang Points To Non-Canonical")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Hreflang Points To Broken URL")["category"],
+        check="Hreflang Points To Broken URL",
+        severity=_catalog_reference("Hreflang Points To Broken URL")["severity"],
+        affected_pages=len(hreflang_points_to_broken_url),
+        total_pages=total_pages,
+        notes=_catalog_reference("Hreflang Points To Broken URL")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Hreflang Language Conflict")["category"],
+        check="Hreflang Language Conflict",
+        severity=_catalog_reference("Hreflang Language Conflict")["severity"],
+        affected_pages=len(hreflang_language_conflict),
+        total_pages=total_pages,
+        notes=_catalog_reference("Hreflang Language Conflict")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Structured Data Missing Fields")["category"],
+        check="Structured Data Missing Fields",
+        severity=_catalog_reference("Structured Data Missing Fields")["severity"],
+        affected_pages=len(structured_data_missing_fields),
+        total_pages=total_pages,
+        notes=_catalog_reference("Structured Data Missing Fields")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Structured Data Type Mismatch")["category"],
+        check="Structured Data Type Mismatch",
+        severity=_catalog_reference("Structured Data Type Mismatch")["severity"],
+        affected_pages=len(structured_data_type_mismatch),
+        total_pages=total_pages,
+        notes=_catalog_reference("Structured Data Type Mismatch")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Unlazy Below-Fold Images")["category"],
+        check="Unlazy Below-Fold Images",
+        severity=_catalog_reference("Unlazy Below-Fold Images")["severity"],
+        affected_pages=len(unlazy_below_fold_images),
+        total_pages=total_pages,
+        notes=_catalog_reference("Unlazy Below-Fold Images")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Empty Alt Attribute")["category"],
+        check="Empty Alt Attribute",
+        severity=_catalog_reference("Empty Alt Attribute")["severity"],
+        affected_pages=len(empty_alt_attribute),
+        total_pages=total_pages,
+        notes=_catalog_reference("Empty Alt Attribute")["notes"],
+    )
+    _add_finding(
+        findings,
+        category=_catalog_reference("Dense Tap Targets")["category"],
+        check="Dense Tap Targets",
+        severity=_catalog_reference("Dense Tap Targets")["severity"],
+        affected_pages=len(dense_tap_targets),
+        total_pages=total_pages,
+        notes=_catalog_reference("Dense Tap Targets")["notes"],
     )
     _add_finding(
         findings,

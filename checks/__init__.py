@@ -1,12 +1,14 @@
 """Registry of stubbed checks_catalog.csv checks awaiting implementation.
 
-health_score.py implements 65 checks directly (see CHECK_NAME_TO_CATALOG_ID
-there for the full list — spread across every checks/*.py module except
-security.py's SSL/header checks and international.py's cluster-wide
-cross-referencing checks) plus the aggregate score/category-scores/
-quick-wins rows (C136, C137, C139). The remaining 70 checks in
-checks_catalog.csv have a placeholder function here, grouped by category
-into one module per file.
+health_score.py implements 85 checks directly (see CHECK_NAME_TO_CATALOG_ID
+there for the full list — spread across every checks/*.py module). What's
+left mostly needs capability the crawler doesn't have yet: robots.txt/
+sitemap fetches, SSL/TLS inspection, HTTP response headers, external link
+requests, or a real redirect-status pipeline (the crawler currently
+follows redirects transparently via requests' default allow_redirects,
+so 3XX-dependent checks can't see intermediate hop statuses). The
+remaining 50 checks in checks_catalog.csv have a placeholder function
+here, grouped by category into one module per file.
 
 Each stub has the signature (pages_df, site_ctx) -> None and raises
 NotImplementedError. site_ctx is a placeholder for site-level data the

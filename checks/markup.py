@@ -36,18 +36,81 @@ def check_C109(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C110(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+REQUIRED_FIELDS_BY_TYPE = {
+    "Organization": ["name"],
+    "LocalBusiness": ["name", "address"],
+    "Product": ["name"],
+    "Article": ["headline"],
+    "BlogPosting": ["headline"],
+    "NewsArticle": ["headline"],
+    "Person": ["name"],
+    "WebSite": ["name"],
+    "BreadcrumbList": ["itemListElement"],
+}
+
+
+def _iter_jsonld_nodes(html: Any):
+    if not html:
+        return
+    soup = BeautifulSoup(str(html), "html.parser")
+    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        content = script.string or script.get_text()
+        if not content or not content.strip():
+            continue
+        try:
+            data = json.loads(content)
+        except ValueError:
+            continue
+        candidates = data if isinstance(data, list) else [data]
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            graph = candidate.get("@graph")
+            if isinstance(graph, list):
+                for node in graph:
+                    if isinstance(node, dict):
+                        yield node
+            else:
+                yield candidate
+
+
+def _has_missing_required_fields(html: Any) -> bool:
+    for node in _iter_jsonld_nodes(html):
+        node_type = node.get("@type")
+        types = node_type if isinstance(node_type, list) else [node_type]
+        for t in types:
+            required = REQUIRED_FIELDS_BY_TYPE.get(str(t))
+            if required and any(field not in node for field in required):
+                return True
+    return False
+
+
+def check_C110(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """structured data missing required fields for declared @type (Warning · Page)
-    e.g. Organization missing 'name'.
+    Covers a small set of common schema.org types (Organization,
+    LocalBusiness, Product, Article/BlogPosting/NewsArticle, Person,
+    WebSite, BreadcrumbList); other types aren't checked.
     """
-    raise NotImplementedError("C110 not yet implemented")
+    mask = pages_df["HTML"].fillna("").apply(_has_missing_required_fields)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C111(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def check_C111(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """structured data type mismatch vs visible page content (Notice · Page)
-    e.g. Product schema on a blog post.
+    Narrow heuristic: a Product schema type on a page with zero images is
+    a plausible content mismatch, since real product pages almost always
+    show at least one product photo.
     """
-    raise NotImplementedError("C111 not yet implemented")
+    def _is_product_without_images(row: pd.Series) -> bool:
+        if "Product" not in str(row.get("Schema", "")):
+            return False
+        try:
+            return int(row.get("Image Count", 0) or 0) == 0
+        except (TypeError, ValueError):
+            return False
+
+    mask = pages_df.apply(_is_product_without_images, axis=1)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def _has_twitter_card(html: Any) -> bool:
@@ -96,8 +159,6 @@ def check_C116(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
 
 
 CHECKS = {
-    "C110": check_C110,
-    "C111": check_C111,
     "C114": check_C114,
     "C115": check_C115,
 }

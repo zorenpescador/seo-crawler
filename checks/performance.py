@@ -97,9 +97,25 @@ def check_C124(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.Da
     return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
-def check_C125(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
-    """no lazy-loading attribute on below-fold images (Notice · Page)"""
-    raise NotImplementedError("C125 not yet implemented")
+ABOVE_FOLD_IMAGE_COUNT = 1
+
+
+def _has_unlazy_below_fold_image(html: Any) -> bool:
+    if not html:
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    images = soup.find_all("img")
+    below_fold = images[ABOVE_FOLD_IMAGE_COUNT:]
+    return any(str(img.get("loading", "")).lower() != "lazy" for img in below_fold)
+
+
+def check_C125(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
+    """no lazy-loading attribute on below-fold images (Notice · Page)
+    Without rendering, "below-fold" is approximated as every image after
+    the first one in document order.
+    """
+    mask = pages_df["HTML"].fillna("").apply(_has_unlazy_below_fold_image)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C126(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -139,7 +155,6 @@ def check_C128(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
 CHECKS = {
     "C119": check_C119,
     "C120": check_C120,
-    "C125": check_C125,
     "C126": check_C126,
     "C128": check_C128,
 }
