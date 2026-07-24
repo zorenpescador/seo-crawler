@@ -31,9 +31,17 @@ def check_C111(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
     raise NotImplementedError("C111 not yet implemented")
 
 
-def check_C113(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
+def _has_twitter_card(html: Any) -> bool:
+    if not html:
+        return False
+    soup = BeautifulSoup(str(html), "html.parser")
+    return bool(soup.find("meta", attrs={"name": "twitter:card"}))
+
+
+def check_C113(pages_df: pd.DataFrame, site_ctx: Dict[str, Any] = None) -> pd.DataFrame:
     """Twitter Card tags missing (Notice · Page)"""
-    raise NotImplementedError("C113 not yet implemented")
+    mask = ~pages_df["HTML"].fillna("").apply(_has_twitter_card)
+    return pages_df.loc[mask, ["URL"]].drop_duplicates().reset_index(drop=True)
 
 
 def check_C114(pages_df: pd.DataFrame, site_ctx: Dict[str, Any]) -> None:
@@ -72,7 +80,6 @@ CHECKS = {
     "C109": check_C109,
     "C110": check_C110,
     "C111": check_C111,
-    "C113": check_C113,
     "C114": check_C114,
     "C115": check_C115,
 }
